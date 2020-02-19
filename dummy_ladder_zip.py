@@ -168,6 +168,7 @@ zip_types = {
     "dt": DummyZip("SharpShadows", "Protoss", os.path.join("dummies", "protoss", "dark_templar_rush.py")),
     "4gate": DummyZip("SharpRush", "Protoss", os.path.join("dummies", "protoss", "gate4.py")),
     "stalker": DummyZip("SharpSpiders", "Protoss", os.path.join("dummies", "protoss", "macro_stalkers.py")),
+    "madai": DummyZip("MadAI", "Protoss", os.path.join("dummies", "protoss", "MadAI.py")),
     "robo": DummyZip("SharpRobots", "Protoss", os.path.join("dummies", "protoss", "robo.py")),
     "voidray": DummyZip("SharpRays", "Protoss", os.path.join("dummies", "protoss", "voidray.py")),
 
