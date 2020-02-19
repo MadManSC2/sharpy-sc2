@@ -86,8 +86,8 @@ class KnowledgeBot(BotAI):
                 # Does not work with realtime due to other calculation at start. In this case, all workers are just
                 # going to one mineral patch as before
 
-            if iteration == 10:
-                await self.chat_init()
+            # if iteration == 10:
+            #    await self.chat_init()
 
             if not self.realtime and self.last_game_loop == self.state.game_loop:
                 self.realtime = True

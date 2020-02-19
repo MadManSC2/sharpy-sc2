@@ -517,6 +517,7 @@ class Knowledge:
     def _find_gather_point(self):
         self.gather_point = self.base_ramp.top_center.towards(self.base_ramp.bottom_center, -4)
         start = 1
+
         if self.map.safe_first_expand:
             start = 2
 
@@ -527,6 +528,10 @@ class Knowledge:
             elif zone.is_ours:
                 if len(self.zone_manager.gather_points) > i:
                     self.gather_point = self.zone_manager.expansion_zones[self.zone_manager.gather_points[i]].gather_point
+
+        if len(self.ai.structures(UnitTypeId.PYLON).ready.closer_than(20, self.zone_manager.expansion_zones[-3].center_location)) > 0:
+            self.gather_point = self.zone_manager.expansion_zones[-3].center_location
+            # If there is a proxy Pylon, use that as a gather point
 
     def get_z(self, point: Point2):
         return self.terrain_to_z_height(self.ai.get_terrain_height(point))
