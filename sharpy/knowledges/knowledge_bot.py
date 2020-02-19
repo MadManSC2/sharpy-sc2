@@ -81,6 +81,11 @@ class KnowledgeBot(BotAI):
 
     async def on_step(self, iteration):
         try:
+            if iteration == 0:
+                await self.distribute_first_worker()
+                # Does not work with realtime due to other calculation at start. In this case, all workers are just
+                # going to one mineral patch as before
+
             if iteration == 10:
                 await self.chat_init()
 
@@ -156,3 +161,8 @@ class KnowledgeBot(BotAI):
                 await self.synchronous_do(townhall.train(UnitTypeId.PROBE))
             if townhall.type_id == UnitTypeId.HATCHERY:
                 await self.synchronous_do(townhall.train(UnitTypeId.DRONE))
+
+    async def distribute_first_worker(self):
+        for worker in self.workers:
+            closest_mineral_patch = self.mineral_field.closest_to(worker)
+            self.do(worker.gather(closest_mineral_patch))
