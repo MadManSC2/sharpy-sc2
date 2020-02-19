@@ -58,6 +58,10 @@ class ActWarpUnit(ActBase):
                 # Reset position to nexus to reduce the possibility of warping stuck units in.
                 target_point = nexuses.closest_to(target_point).position
 
+            if len(self.cache.own(UnitTypeId.PYLON).ready.closer_than(10, self.ai.game_info.map_center.towards(self.ai.enemy_start_locations[0], 17).position)) > 0:
+                # If there is a proxy pylon, warp units there
+                target_point = self.ai.game_info.map_center.towards(self.ai.enemy_start_locations[0], 17).position
+
             near_position = self.cache.own(UnitTypeId.PYLON).ready.closest_to(target_point).position
 
             phasing = self.cache.own(UnitTypeId.WARPPRISMPHASING)

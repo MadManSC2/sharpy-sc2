@@ -7,20 +7,20 @@ from sharpy.plans.acts import *
 from sharpy.plans.acts.protoss import *
 from sharpy.plans.require import *
 from sharpy.plans.tactics import *
+from sc2.position import Point2
 
 import random
 import numpy as np
 import time
 
 scout_data = []
-build_order = -1
-proxy_location = []
 #TODO: Solve it without using a global variable
 
 
 class GetScoutingData(ActBase):
     def __init__(self):
         super().__init__()
+        self.build_order = -1
 
     async def start(self, knowledge: 'Knowledge'):
         await super().start(knowledge)
@@ -28,10 +28,8 @@ class GetScoutingData(ActBase):
     async def execute(self) -> bool:
 
         global scout_data
-        global build_order
-        global proxy_location
 
-        if build_order == -1:
+        if self.build_order == -1:
             scout_data = [
                 self.knowledge.enemy_start_location,
                 self.knowledge.enemy_race,
@@ -51,11 +49,10 @@ class GetScoutingData(ActBase):
                 self.knowledge.enemy_army_predicter.enemy_mined_minerals,
             ]
 
-            build_order = 2 #random.randrange(0, 2)
-            proxy_location = self.ai.game_info.map_center.towards(self.ai.enemy_start_locations[0], 25) #self.knowledge.expansion_zones[-3].center_location
+            self.build_order = 1 #random.randrange(0, 2)
+
             print(scout_data)
-            print(build_order)
-            print(proxy_location)
+            print(self.build_order)
 
             return True
         else:
@@ -69,8 +66,7 @@ class MadAI(KnowledgeBot):
         self.proxy_location = None
         self.train_data = []
         global scout_data
-        global build_order
-        global proxy_location
+        self.scout = GetScoutingData()
 
     async def start(self, knowledge: 'Knowledge'):
         await super().start(knowledge)
@@ -81,7 +77,7 @@ class MadAI(KnowledgeBot):
             print(scout_data)
             self.train_data.append(
                 [
-                    build_order,
+                    self.scout.build_order,
                     scout_data[0][0]+scout_data[0][1],
                 ]
             )
@@ -89,18 +85,8 @@ class MadAI(KnowledgeBot):
             np.save("data/{}.npy".format(str(int(time.time()))), np.array(self.train_data))
 
     async def create_plan(self) -> BuildOrder:
-
-        first_data = GetScoutingData()
-
-        print(build_order)
-        if build_order == 2:
-            # first_choice = self.defend_dts()
-            first_choice = self.cannon_rush()
-        elif build_order == 1:
-            first_choice = self.four_gate()
-        else:
-            first_choice = self.two_base_stalker()
-
+        # Common Start Build Order
+        #TODO: Improve timings to meet: https://lotv.spawningtool.com/build/87940/
         return BuildOrder([
             Step(None, ChronoUnitProduction(UnitTypeId.PROBE, UnitTypeId.NEXUS),
                  skip=RequiredUnitExists(UnitTypeId.PROBE, 40, include_pending=True), skip_until=RequiredUnitExists(UnitTypeId.ASSIMILATOR, 1)),
@@ -113,10 +99,11 @@ class MadAI(KnowledgeBot):
                 GridBuilding(UnitTypeId.GATEWAY, 1),
                 GridBuilding(UnitTypeId.CYBERNETICSCORE, 1),
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 18),
-                Step(None, first_data, skip_until=RequiredUnitReady(UnitTypeId.CYBERNETICSCORE, 1),
+                Step(None, self.scout, skip_until=RequiredUnitReady(UnitTypeId.CYBERNETICSCORE, 1),
                      skip=RequiredUnitExists(UnitTypeId.STALKER, 1, include_pending=True)),
-                Step(None, first_choice, skip_until=RequiredUnitReady(UnitTypeId.CYBERNETICSCORE, 1), skip=RequiredUnitExists(UnitTypeId.PROBE, 40, include_pending=True)),
             ]),
+            Step(lambda k: self.scout.build_order == 0, self.two_base_stalker()),
+            Step(lambda k: self.scout.build_order == 1, self.four_gate()),
             SequentialList([
                 PlanZoneDefense(),
                 RestorePower(),
@@ -128,15 +115,14 @@ class MadAI(KnowledgeBot):
         ])
 
     def four_gate(self) -> ActBase:
+        #TODO: Improve Timings, Chrono Warpgate, Gather at Proxy-Pylon, Add 1-2 Sentries
         self.knowledge.print(f"4-Gate", "Build")
-        # super().chat_send(
-        #     "(glhf) MadAI v3.0: 4-Gate chosen!"
-        # )
-        print(proxy_location)
+        natural = self.knowledge.expansion_zones[-3]
+        pylon_pos: Point2 = natural.behind_mineral_position_center
         return BuildOrder([
             SequentialList([
                 GridBuilding(UnitTypeId.GATEWAY, 2),
-                BuildPosition(UnitTypeId.PYLON, proxy_location, exact=False,
+                BuildPosition(UnitTypeId.PYLON, pylon_pos, exact=False,
                               only_once=True),
                 BuildOrder(
                     [
@@ -158,11 +144,8 @@ class MadAI(KnowledgeBot):
         ])
 
     def two_base_stalker(self) -> ActBase:
+        #TODO: Add Proxy-Pylon, Chrono Tech, Research Blink, Add 1-2 Sentries with Guardian Shield
         self.knowledge.print(f"2-Base Stalker", "Build")
-        # await self.chat_send(
-        #     "(glhf) MadAI v3.0: 2-Base Macro Stalker chosen!"
-        # )
-        print(proxy_location)
         return BuildOrder([
             SequentialList([
                 ActExpand(2),
@@ -189,24 +172,6 @@ class MadAI(KnowledgeBot):
                         ]
                     ])
             ]),
-        ])
-
-    def cannon_rush(self) -> ActBase:
-        self.knowledge.print(f"Cannon rush", "Build")
-        return BuildOrder([
-            [
-                GridBuilding(UnitTypeId.PYLON, 1),
-                GridBuilding(UnitTypeId.FORGE, 1, priority=True),
-            ],
-
-            # ProxyCannoneer(),
-            ProtossUnit(UnitTypeId.PROBE, 18),
-            ChronoUnitProduction(UnitTypeId.PROBE, UnitTypeId.NEXUS),
-            [
-                Step(RequiredMinerals(400), GridBuilding(UnitTypeId.GATEWAY, 1)),
-                Step(RequiredMinerals(700), ActExpand(2), skip=RequiredUnitExists(UnitTypeId.NEXUS, 2)),
-                GridBuilding(UnitTypeId.CYBERNETICSCORE, 1),
-            ]
         ])
 
 
