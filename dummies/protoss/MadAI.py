@@ -401,6 +401,7 @@ class MadAI(KnowledgeBot):
         #TODO: Implement more BOs
         #TODO: Build second pylon at reaper ramp against Terran
         #TODO: Gather in front of enemy base (Deathball) before attack
+        #TODO: Ignore Larva and Eggs even more?
         return BuildOrder([
             Step(None, ChronoUnitProduction(UnitTypeId.PROBE, UnitTypeId.NEXUS),
                  skip=RequiredUnitExists(UnitTypeId.PROBE, 19, include_pending=True), skip_until=RequiredUnitReady(UnitTypeId.PYLON, 1)),
@@ -426,7 +427,7 @@ class MadAI(KnowledgeBot):
             Step(lambda k: self.scout.build_order == 1, self.four_gate()),
             Step(lambda k: self.scout.build_order == 2, self.defend()),
             SequentialList([
-                PlanZoneDefense(),
+                Step(None, PlanZoneDefense(), skip=RequiredUnitReady(UnitTypeId.PROBE, 23)),
                 RestorePower(),
                 PlanDistributeWorkers(),
             ])
@@ -468,8 +469,11 @@ class MadAI(KnowledgeBot):
                 ChronoUnitProduction(UnitTypeId.STALKER, UnitTypeId.GATEWAY),
             ]),
             SequentialList([
+                # Stop Defending when attacking, i.e. Base-Trade
+                Step(None, PlanZoneDefense(), skip=RequiredUnitReady(UnitTypeId.STALKER, 4)),
+                Step(None, PlanZoneGather(), skip=RequiredUnitReady(UnitTypeId.PYLON, 2)),
                 Step(RequiredUnitReady(UnitTypeId.GATEWAY, 4), PlanZoneGather()),
-                Step(RequiredUnitReady(UnitTypeId.STALKER, 4), PlanZoneAttack(12)),
+                Step(RequiredUnitReady(UnitTypeId.STALKER, 6), PlanZoneAttack(12)),
                 PlanFinishEnemy(),
             ])
         ])
@@ -535,6 +539,8 @@ class MadAI(KnowledgeBot):
                      skip=RequiredUnitReady(UnitTypeId.IMMORTAL, 3)),
             ]),
             SequentialList([
+                # Stop Defending when attacking, i.e. Base-Trade
+                Step(None, PlanZoneDefense(), skip=RequiredTechReady(UpgradeId.CHARGE, 0.9)),
                 PlanZoneGather(),
                 Step(RequiredTechReady(UpgradeId.CHARGE, 0.9), PlanZoneAttack(12)),
                 PlanFinishEnemy(),
@@ -551,6 +557,9 @@ class MadAI(KnowledgeBot):
         else:
             defensive_position1 = self.knowledge.base_ramp.top_center.towards(self.knowledge.base_ramp.bottom_center, -4)
             defensive_position2 = self.knowledge.base_ramp.top_center.towards(self.knowledge.expansion_zones[1].mineral_line_center, 4)
+        attack = PlanZoneAttack(10)
+        attack.retreat_multiplier = 0.5  # All in
+        attack.enemy_power_multiplier = 0.7  # Attack even if it might be a bad idea
         return BuildOrder([
             SequentialList([
                 GridBuilding(UnitTypeId.FORGE, 1),
@@ -584,7 +593,7 @@ class MadAI(KnowledgeBot):
             [
                 AutoPylon(),
                 Step(RequiredUnitReady(UnitTypeId.DARKSHRINE, 1), ProtossUnit(UnitTypeId.DARKTEMPLAR, 3, priority=True),
-                     skip_until=RequiredUnitReady(UnitTypeId.DARKSHRINE, 1)),
+                     skip_until=RequiredUnitReady(UnitTypeId.DARKSHRINE, 1), skip=RequiredTechReady(UpgradeId.CHARGE)),
                 Step(RequiredUnitReady(UnitTypeId.DARKSHRINE, 1), ProtossUnit(UnitTypeId.ZEALOT, 40)),
                 Step(RequiredUnitReady(UnitTypeId.DARKSHRINE, 1), ProtossUnit(UnitTypeId.SENTRY, 5)),
             ],
@@ -598,10 +607,13 @@ class MadAI(KnowledgeBot):
                 ChronoAnyTech(0)
             ]),
             SequentialList([
+                # Stop Defending when attacking, i.e. Base-Trade
+                Step(None, PlanZoneDefense(), skip=RequiredTechReady(UpgradeId.CHARGE)),
                 Step(None, PlanZoneGather(), skip=RequiredUnitReady(UnitTypeId.DARKSHRINE, 1)),
-                Step(RequiredUnitReady(UnitTypeId.DARKSHRINE, 1), Dt_Harass()),
+                Step(None, PlanZoneGather(), skip_until=RequiredTechReady(UpgradeId.CHARGE, 0.5)),
+                Step(RequiredUnitReady(UnitTypeId.DARKSHRINE, 1), Dt_Harass(), skip=RequiredTechReady(UpgradeId.CHARGE)),
                 Step(RequiredTechReady(UpgradeId.CHARGE), PlanZoneGather()),
-                Step(RequiredTechReady(UpgradeId.CHARGE), PlanZoneAttack(10)),
+                Step(RequiredTechReady(UpgradeId.CHARGE), attack),
                 PlanFinishEnemy(),
             ])
         ])

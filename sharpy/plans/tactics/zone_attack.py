@@ -18,8 +18,6 @@ if TYPE_CHECKING:
     from sharpy.managers import *
 
 
-ENEMY_TOTAL_POWER_MULTIPLIER = 1.2
-
 RETREAT_TIME = 20
 
 RETREAT_STOP_DISTANCE = 5
@@ -40,11 +38,15 @@ class PlanZoneAttack(ActBase):
     DISTANCE_TO_INCLUDE = 18
     DISTANCE2_TO_INCLUDE = 18 * 18
     RETREAT_POWER_PERCENTAGE = 0.8
+    ENEMY_TOTAL_POWER_MULTIPLIER = 1.2
 
     def __init__(self, start_attack_power: float = 20):
         assert isinstance(start_attack_power, float) or isinstance(start_attack_power, int)
         super().__init__()
         self.retreat_multiplier = PlanZoneAttack.RETREAT_POWER_PERCENTAGE
+        # Have a multiplier in order to attack, even if the combat manager thinks it is a bad idea.
+        self.enemy_power_multiplier = PlanZoneAttack.ENEMY_TOTAL_POWER_MULTIPLIER
+
         self.attack_retreat_started: Optional[float] = None
 
         self.start_attack_power = start_attack_power
@@ -182,8 +184,8 @@ class PlanZoneAttack(ActBase):
                 return False
 
         enemy_total_power: ExtendedPower = self.knowledge.enemy_units_manager.enemy_total_power
-        enemy_total_power.multiply(ENEMY_TOTAL_POWER_MULTIPLIER)
-        multiplier = ENEMY_TOTAL_POWER_MULTIPLIER
+        enemy_total_power.multiply(self.enemy_power_multiplier)
+        multiplier = self.enemy_power_multiplier
 
         zone_count = 0
         for zone in self.knowledge.expansion_zones: # type: Zone
