@@ -11,3 +11,4 @@ from .micro_oracles import MicroOracles
 from .micro_phoenixes import MicroPhoenixes
 from .micro_sentries import MicroSentries
 from .micro_warp_prism import MicroWarpPrism
+from .micro_immortals import MicroImmortals
