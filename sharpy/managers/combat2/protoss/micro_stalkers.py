@@ -112,5 +112,13 @@ class MicroStalkers(GenericMicro):
                 if target.distance_to(unit) > 3:
                     return Action(target, False, AbilityId.EFFECT_BLINK_STALKER)
 
-        return super().unit_solve_combat(unit, current_command)
+        # If there are SCVs near a bunker kill them with top priority!
+        #TODO: Check if the SCVs are repairing
+        if self.enemies_near_by(UnitTypeId.BUNKER):
+            scvs = self.enemies_near_by(UnitTypeId.SCV)
+            if scvs:
+                target = scvs.closest_to(unit)
+                return Action(target, True)
 
+
+        return super().unit_solve_combat(unit, current_command)
