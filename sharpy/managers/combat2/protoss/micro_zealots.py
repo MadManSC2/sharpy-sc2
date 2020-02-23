@@ -1,10 +1,26 @@
+from typing import Dict
+
 from sharpy.managers.combat2 import MicroStep, Action, MoveType, NoAction
 from sc2.ids.buff_id import BuffId
+from sc2 import UnitTypeId
 from sc2.unit import Unit
 from sc2.units import Units
 
+high_priority: Dict[UnitTypeId, int] = {
+
+    # Zerg
+    UnitTypeId.LARVA: -1,
+    UnitTypeId.EGG: -1,
+    UnitTypeId.LOCUSTMP: -1,
+
+}
+
 
 class MicroZealots(MicroStep):
+    def __init__(self, knowledge):
+        super().__init__(knowledge)
+        self.prio_dict = high_priority
+
     def group_solve_combat(self, units: Units, current_command: Action) -> Action:
         if self.move_type == MoveType.DefensiveRetreat or self.move_type == MoveType.PanicRetreat:
             return current_command
