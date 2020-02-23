@@ -217,7 +217,7 @@ class BuildingSolver(ManagerBase):
         if self.wall_type == WallType.Auto:
             if self.knowledge.my_race == Race.Protoss:
                 if self.knowledge.enemy_race == Race.Terran:
-                    self.wall_type = WallType.NoWall
+                    self.wall_type = WallType.ProtossMainProtoss
                 elif self.knowledge.enemy_race == Race.Protoss:
                     self.wall_type = WallType.ProtossMainProtoss
                 elif self.knowledge.rush_distance < 100:

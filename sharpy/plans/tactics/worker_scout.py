@@ -23,6 +23,7 @@ class WorkerScout(ActBase):
         self.scout: Unit = None
         self.scout_tag = None
 
+        self.enemy_expansion_scouted: bool = False
         self.enemy_ramp_top_scouted: bool = None
 
         # This is used for stuck / unreachable detection
@@ -71,7 +72,7 @@ class WorkerScout(ActBase):
         enemy_base_found = self.knowledge.enemy_start_location_found
 
         enemy_base_scouted = enemy_base_found and self.knowledge.enemy_main_zone.is_scouted_at_least_once \
-            and self.knowledge.enemy_main_zone.scout_last_circled
+            and self.knowledge.enemy_main_zone.scout_last_circled # and self.enemy_expansion_scouted
 
         enemy_base_blocked = enemy_base_found and self.enemy_ramp_top_scouted \
             and await self.target_unreachable(self.knowledge.enemy_main_zone.behind_mineral_position_center)
@@ -126,7 +127,8 @@ class WorkerScout(ActBase):
 
         self.scout_locations.clear()
 
-        self.scout_locations = map_to_point2s_minerals(self.zone_manager.enemy_expansion_zones[0:5])
+        self.scout_locations = map_to_point2s_minerals(self.zone_manager.enemy_expansion_zones[0:2])
+        self.enemy_expansion_scouted = True
         self.print(f"Scouting {len(self.scout_locations)} expansions from enemy base towards us")
 
     @property

@@ -1,12 +1,12 @@
 import sc2, sys, random
 from ladder import run_ladder_game
-from protoss.MadAI import LadderBot
+from MadAI.MadAI import LadderBot
 from sc2 import Race, Difficulty
 from sc2.player import Bot, Computer
 
-bot = LadderBot()
-race = bot.my_race
-protoss_bot = Bot(race, bot)
+MadAI = LadderBot()
+race = MadAI.my_race
+protoss_bot = Bot(race, MadAI)
 
 
 def main():
@@ -35,9 +35,9 @@ def main():
         ]
 
         selected_map = random.randrange(0, 7)
-        race = 0 # random.randrange(0, 3)
+        race = random.randrange(0, 3)
         sc2.run_game(sc2.maps.get(maps[selected_map]), [
-            Bot(Race.Protoss, bot),
+            Bot(Race.Protoss, MadAI),
             Computer(races[race], Difficulty.VeryHard)
         ], realtime=False)
 

@@ -73,11 +73,9 @@ class KnowledgeBot(BotAI):
         await self.start_first_worker()
         self._client.game_step = int(self.config["general"]["game_step_size"])
 
-
     async def on_start(self):
         """Allows initializing the bot when the game data is available."""
         await self.real_init()
-
 
     async def on_step(self, iteration):
         try:

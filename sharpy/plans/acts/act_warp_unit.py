@@ -60,10 +60,9 @@ class ActWarpUnit(ActBase):
 
             if len(self.cache.own(UnitTypeId.PYLON).ready.closer_than(10, self.ai.game_info.map_center.towards(self.ai.enemy_start_locations[0], 17).position)) > 0:
                 # If there is a proxy pylon, warp units there
-                target_point = self.ai.game_info.map_center.towards(self.ai.enemy_start_locations[0], 17).position
+                target_point = self.knowledge.gather_point
 
-            if len(self.cache.own(UnitTypeId.PYLON).ready.closer_than(20, self.knowledge.expansion_zones[
-                -3].center_location)) > 0:
+            if len(self.cache.own(UnitTypeId.PYLON).ready.closer_than(20, self.knowledge.expansion_zones[-3].center_location)) > 0:
                 # If there is a proxy pylon, warp units there
                 target_point = self.knowledge.gather_point
 
