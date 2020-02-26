@@ -1,6 +1,6 @@
 from sc2 import BotAI, UnitTypeId, AbilityId, Race
 from sc2.ids.upgrade_id import UpgradeId
-
+from sharpy.managers.roles import UnitTask
 from sharpy.knowledges import KnowledgeBot
 from sharpy.plans import BuildOrder, Step, SequentialList, StepBuildGas
 from sharpy.plans.acts import *
@@ -275,6 +275,7 @@ class Dt_Harass(ActBase):
                     self.knowledge.expansion_zones[-1].mineral_line_center,
                 )
             )
+            self.knowledge.roles.set_task(UnitTask.Reserved, dt1)
             if len(self.cache.own(UnitTypeId.DARKTEMPLAR)) > 1:
                 dt2 = self.cache.own(UnitTypeId.DARKTEMPLAR)[1]
                 self.do(
@@ -283,6 +284,7 @@ class Dt_Harass(ActBase):
                         self.knowledge.expansion_zones[-2].mineral_line_center,
                     )
                 )
+                self.knowledge.roles.set_task(UnitTask.Reserved, dt2)
             enemy_workers = self.knowledge.known_enemy_units.of_type(
                 [UnitTypeId.SCV, UnitTypeId.PROBE, UnitTypeId.DRONE, UnitTypeId.MULE])
             for dt in self.cache.own(UnitTypeId.DARKTEMPLAR).idle:
@@ -299,7 +301,7 @@ class Dt_Harass(ActBase):
                         )
                     )
                 else:
-                    self.do(dt.attack(self.knowledge.enemy_start_location))
+                    self.do(dt.attack(self.knowledge.known_enemy_units.closest_to(dt.position)))
 
         return True
 
@@ -400,16 +402,19 @@ class MadAI(KnowledgeBot):
         # Common Start Build Order
         #TODO: Implement more BOs
         #TODO: Build second pylon at reaper ramp against Terran
-        #TODO: Gather in front of enemy base (Deathball) before attack
         #TODO: Ignore Larva and Eggs even more?
+        #TODO: Reenable Defence when Retreating
+        #TODO: Ignore Hallucinations
+        #TODO: Add time depended scouting variables, e.g. hatch before pool, etc.
+        #TODO: Use the Phenoix-Scout-Info to make the attack trigger more flexible, based on the power difference
         return BuildOrder([
             Step(None, ChronoUnitProduction(UnitTypeId.PROBE, UnitTypeId.NEXUS),
                  skip=RequiredUnitExists(UnitTypeId.PROBE, 19, include_pending=True), skip_until=RequiredUnitReady(UnitTypeId.PYLON, 1)),
             SequentialList([
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 14),
                 GridBuilding(UnitTypeId.PYLON, 1),
+                Step(RequiredUnitExists(UnitTypeId.PYLON, 1, include_pending=False), WorkerScout(), skip=RequireCustom(lambda k: self.scout.build_order >= 0)),
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 15),
-                Step(RequiredUnitExists(UnitTypeId.PYLON, 1, include_pending=False), WorkerScout()),
                 GridBuilding(UnitTypeId.GATEWAY, 1),
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 16),
                 StepBuildGas(1),
@@ -419,9 +424,9 @@ class MadAI(KnowledgeBot):
                 StepBuildGas(2),
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 21),
                 GridBuilding(UnitTypeId.CYBERNETICSCORE, 1),
-                GateUnit(UnitTypeId.ZEALOT, 1),
+                ProtossUnit(UnitTypeId.ZEALOT, 1),
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 23),
-                Step(None, self.scout, skip_until=RequiredUnitExists(UnitTypeId.CYBERNETICSCORE, 1), skip=RequiredUnitReady(UnitTypeId.CYBERNETICSCORE))
+                Step(None, self.scout, skip_until=RequiredUnitExists(UnitTypeId.CYBERNETICSCORE, 1))
             ]),
             Step(lambda k: self.scout.build_order == 0, self.two_base_robo()),
             Step(lambda k: self.scout.build_order == 1, self.four_gate()),
@@ -430,6 +435,7 @@ class MadAI(KnowledgeBot):
                 Step(None, PlanZoneDefense(), skip=RequiredUnitReady(UnitTypeId.PROBE, 23)),
                 RestorePower(),
                 PlanDistributeWorkers(),
+                Step(None, PlanZoneGather(), skip=RequiredUnitReady(UnitTypeId.PROBE, 23))
             ])
         ])
 
@@ -450,7 +456,7 @@ class MadAI(KnowledgeBot):
                     [
                         AutoPylon(),
                         ActTech(UpgradeId.WARPGATERESEARCH, UnitTypeId.CYBERNETICSCORE),
-                        GateUnit(UnitTypeId.STALKER, 1, priority=True),
+                        ProtossUnit(UnitTypeId.STALKER, 1, priority=True),
                         GridBuilding(UnitTypeId.GATEWAY, 3),
                         BuildPosition(UnitTypeId.PYLON, pylon_pos, exact=False,
                                       only_once=True),
@@ -460,7 +466,7 @@ class MadAI(KnowledgeBot):
                                  skip_until=RequiredUnitExists(UnitTypeId.STALKER, 2, include_pending=True)),
                             Step(None, ProtossUnit(UnitTypeId.SENTRY, 2),
                                  skip_until=RequiredUnitExists(UnitTypeId.STALKER, 6, include_pending=True)),
-                            Step(None, ProtossUnit(UnitTypeId.STALKER, 50)),
+                            Step(None, GateUnit()),
                         ],
                     ])
             ]),
@@ -471,33 +477,36 @@ class MadAI(KnowledgeBot):
             SequentialList([
                 # Stop Defending when attacking, i.e. Base-Trade
                 Step(None, PlanZoneDefense(), skip=RequiredUnitReady(UnitTypeId.STALKER, 4)),
-                Step(None, PlanZoneGather(), skip=RequiredUnitReady(UnitTypeId.PYLON, 2)),
-                Step(RequiredUnitReady(UnitTypeId.GATEWAY, 4), PlanZoneGather()),
-                Step(RequiredUnitReady(UnitTypeId.STALKER, 6), PlanZoneAttack(12)),
+                PlanZoneGather(),
+                # Step(RequiredUnitReady(UnitTypeId.GATEWAY, 4), PlanZoneGather()),
+                PlanZoneAttack(12),
                 PlanFinishEnemy(),
             ])
         ])
 
     def two_base_robo(self) -> ActBase:
         #TODO: Adapt Unit Composition, Archons as follow-up after first push (ActArchon)
+        pylon_pos = self.knowledge.ai.game_info.map_center.position
+        attack = PlanZoneAttack(12)
+        attack.enemy_power_multiplier = 0.8  # Attack even if it might be a bad idea
         return BuildOrder([
             SequentialList([
                 ActExpand(2),
                 BuildOrder(
                     [
                         ActTech(UpgradeId.WARPGATERESEARCH, UnitTypeId.CYBERNETICSCORE),
-                        GateUnit(UnitTypeId.STALKER, 1),
+                        ProtossUnit(UnitTypeId.STALKER, 1),
                         Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 24)),
                     ]),
                 GridBuilding(UnitTypeId.ROBOTICSFACILITY, 1),
-                GateUnit(UnitTypeId.SENTRY, 1),
+                ProtossUnit(UnitTypeId.SENTRY, 1),
                 Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 25)),
                 GridBuilding(UnitTypeId.PYLON, 3),
                 GridBuilding(UnitTypeId.GATEWAY, 2),
                 Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 26)),
                 BuildOrder(
                     [
-                        GateUnit(UnitTypeId.SENTRY, 2),
+                        ProtossUnit(UnitTypeId.SENTRY, 2),
                         Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 30)),
                         GridBuilding(UnitTypeId.PYLON, 4),
                         SequentialList([
@@ -506,7 +515,7 @@ class MadAI(KnowledgeBot):
                         ])
                     ]),
                 Step(RequiredUnitReady(UnitTypeId.ROBOTICSFACILITY, 1), ProtossUnit(UnitTypeId.IMMORTAL, 1)),
-                GateUnit(UnitTypeId.ZEALOT, 3),
+                ProtossUnit(UnitTypeId.ZEALOT, 3),
                 GridBuilding(UnitTypeId.GATEWAY, 3),
                 Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 32)),
                 Step(RequiredUnitReady(UnitTypeId.IMMORTAL, 1), ProtossUnit(UnitTypeId.OBSERVER, 1)),
@@ -514,10 +523,11 @@ class MadAI(KnowledgeBot):
                 Step(RequiredUnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.TWILIGHTCOUNCIL, 1)),
                 Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 34)),
                 Step(RequiredUnitReady(UnitTypeId.ROBOTICSFACILITY, 1), ProtossUnit(UnitTypeId.IMMORTAL, 2)),
-                GateUnit(UnitTypeId.SENTRY, 4),
+                ProtossUnit(UnitTypeId.SENTRY, 4),
                 GridBuilding(UnitTypeId.GATEWAY, 4),
                 Step(RequiredUnitReady(UnitTypeId.IMMORTAL, 1), ActTech(UpgradeId.CHARGE, UnitTypeId.TWILIGHTCOUNCIL)),
                 StepBuildGas(4),
+                Step(RequiredUnitReady(UnitTypeId.IMMORTAL, 3), BuildPosition(UnitTypeId.PYLON, pylon_pos, exact=False, only_once=True)),
             ]),
             BuildOrder(
                 [
@@ -542,21 +552,23 @@ class MadAI(KnowledgeBot):
                 # Stop Defending when attacking, i.e. Base-Trade
                 Step(None, PlanZoneDefense(), skip=RequiredTechReady(UpgradeId.CHARGE, 0.9)),
                 PlanZoneGather(),
-                Step(RequiredTechReady(UpgradeId.CHARGE, 0.9), PlanZoneAttack(12)),
+                Step(RequiredTechReady(UpgradeId.CHARGE, 0.9), attack),
                 PlanFinishEnemy(),
             ])
         ])
 
     def defend(self) -> ActBase:
         #TODO: Morph DTs into Archons if detected, Proxy-Pylon for DTs only, Follow-Up
+        #TODO: Give DTs something to do if everything is dead near them
+        pylon_pos = self.knowledge.ai.game_info.map_center.position
         if self.knowledge.enemy_race == Race.Zerg:
             defensive_position1 = self.knowledge.expansion_zones[1].mineral_line_center.towards(
                 self.knowledge.expansion_zones[1].behind_mineral_position_center, -12)
             defensive_position2 = self.knowledge.expansion_zones[1].mineral_line_center.towards(
-                self.knowledge.expansion_zones[1].behind_mineral_position_center, -14)
+                self.knowledge.expansion_zones[1].behind_mineral_position_center, -10)
         else:
             defensive_position1 = self.knowledge.base_ramp.top_center.towards(self.knowledge.base_ramp.bottom_center, -4)
-            defensive_position2 = self.knowledge.base_ramp.top_center.towards(self.knowledge.expansion_zones[1].mineral_line_center, 4)
+            defensive_position2 = self.knowledge.base_ramp.top_center.towards(self.knowledge.base_ramp.bottom_center, -5)
         attack = PlanZoneAttack(10)
         attack.retreat_multiplier = 0.5  # All in
         attack.enemy_power_multiplier = 0.7  # Attack even if it might be a bad idea
@@ -568,21 +580,21 @@ class MadAI(KnowledgeBot):
                         Step(RequiredUnitReady(UnitTypeId.CYBERNETICSCORE, 1),
                              BuildPosition(UnitTypeId.SHIELDBATTERY, defensive_position1, exact=False, only_once=True)),
                         ActTech(UpgradeId.WARPGATERESEARCH, UnitTypeId.CYBERNETICSCORE),
-                        GateUnit(UnitTypeId.STALKER, 1),
+                        ProtossUnit(UnitTypeId.STALKER, 1),
                     ]),
                 Step(RequiredUnitReady(UnitTypeId.FORGE, 1),
                      BuildPosition(UnitTypeId.PHOTONCANNON, defensive_position1, exact=False, only_once=True)),
                 Step(RequiredUnitReady(UnitTypeId.FORGE, 1),
                      BuildPosition(UnitTypeId.PHOTONCANNON, defensive_position2, exact=False, only_once=True)),
                 Step(RequiredUnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.TWILIGHTCOUNCIL, 1)),
-                GateUnit(UnitTypeId.SENTRY, 1),
+                ProtossUnit(UnitTypeId.SENTRY, 1),
                 GridBuilding(UnitTypeId.PYLON, 3),
                 GridBuilding(UnitTypeId.GATEWAY, 2),
                 Step(RequiredUnitReady(UnitTypeId.TWILIGHTCOUNCIL, 1), GridBuilding(UnitTypeId.DARKSHRINE, 1)),
                 BuildOrder(
                     [
-                        GateUnit(UnitTypeId.SENTRY, 2),
-                        GateUnit(UnitTypeId.ZEALOT, 3),
+                        ProtossUnit(UnitTypeId.SENTRY, 2),
+                        ProtossUnit(UnitTypeId.ZEALOT, 3),
                         GridBuilding(UnitTypeId.GATEWAY, 3),
                         SequentialList([
                             Step(RequiredUnitReady(UnitTypeId.SENTRY, 1), HallucinatedPhoenixScout()),
@@ -600,6 +612,8 @@ class MadAI(KnowledgeBot):
             SequentialList([
                 Step(RequiredUnitReady(UnitTypeId.DARKTEMPLAR, 3), ActTech(UpgradeId.CHARGE, UnitTypeId.TWILIGHTCOUNCIL)),
                 Step(RequiredUnitReady(UnitTypeId.DARKTEMPLAR, 3), ActTech(UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1, UnitTypeId.FORGE)),
+                Step(RequiredTechReady(UpgradeId.CHARGE, 0.1),
+                     BuildPosition(UnitTypeId.PYLON, pylon_pos, exact=False, only_once=True))
             ]),
             SequentialList([
                 ChronoTech(AbilityId.RESEARCH_WARPGATE, UnitTypeId.CYBERNETICSCORE),
@@ -609,10 +623,8 @@ class MadAI(KnowledgeBot):
             SequentialList([
                 # Stop Defending when attacking, i.e. Base-Trade
                 Step(None, PlanZoneDefense(), skip=RequiredTechReady(UpgradeId.CHARGE)),
-                Step(None, PlanZoneGather(), skip=RequiredUnitReady(UnitTypeId.DARKSHRINE, 1)),
-                Step(None, PlanZoneGather(), skip_until=RequiredTechReady(UpgradeId.CHARGE, 0.5)),
+                PlanZoneGather(),
                 Step(RequiredUnitReady(UnitTypeId.DARKSHRINE, 1), Dt_Harass(), skip=RequiredTechReady(UpgradeId.CHARGE)),
-                Step(RequiredTechReady(UpgradeId.CHARGE), PlanZoneGather()),
                 Step(RequiredTechReady(UpgradeId.CHARGE), attack),
                 PlanFinishEnemy(),
             ])
