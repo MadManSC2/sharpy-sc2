@@ -23,6 +23,7 @@ class PlanZoneDefense(ActBase):
         self.defender_secondary_tags: Dict[int, List[int]] = dict()
         self.zone_seen_enemy: Dict[int, float] = dict()
 
+        self.defend_fighting_scout = False
 
     async def start(self, knowledge: Knowledge):
         await super().start(knowledge)
@@ -114,6 +115,16 @@ class PlanZoneDefense(ActBase):
                     else:
                         await self.worker_defence(defenders.power, defense_required, enemy_center, zone, zone_tags,
                                               zone_worker_defenders)
+
+                # If the enemy worker scout is attacking us and there are no other Gateway Units, fight back
+                if len(enemies) == 1 and enemies[0].type_id in self.unit_values.worker_types  \
+                        and enemies[0].is_attacking and not self.defend_fighting_scout \
+                        and len(self.ai.units(UnitTypeId.ZEALOT)) == 0:
+                    self.defend_fighting_scout = True
+                    prg2 = self.ai.units(UnitTypeId.PROBE).random_group_of(2)
+                    print(prg2)
+                    for pr in prg2:
+                        self.combat.add_unit(pr)
 
                 self.combat.execute(enemy_center, MoveType.SearchAndDestroy)
         return True  # never block
