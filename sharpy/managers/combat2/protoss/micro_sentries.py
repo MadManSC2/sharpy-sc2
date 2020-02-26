@@ -1,4 +1,4 @@
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING, Dict
 
 from sharpy.general.zone import Zone
 from sharpy.managers.combat2 import MoveType, Action, NoAction, GenericMicro, CombatModel
@@ -6,7 +6,7 @@ from sc2.position import Point2
 if TYPE_CHECKING:
     from sharpy.managers import *
 
-from sc2 import AbilityId, Race
+from sc2 import AbilityId, Race, UnitTypeId
 from sc2.ids.buff_id import BuffId
 from sc2.unit import Unit, UnitOrder
 from sc2.units import Units
@@ -19,9 +19,87 @@ FORCE_FIELD_ENERGY_COST = 50
 SHIELD_ENERGY_COST = 75
 HALLUCINATION_ENERGY_COST = 75
 
+high_priority: Dict[UnitTypeId, int] = {
+    # Terran
+    UnitTypeId.SIEGETANK: 8,
+    UnitTypeId.SIEGETANKSIEGED: 10,  # sieged tanks are much higher priority than unsieged
+    UnitTypeId.WIDOWMINE: 8,
+    UnitTypeId.WIDOWMINEBURROWED: 10,
+    UnitTypeId.MULE: 3,
+    UnitTypeId.SCV: 10,  # prioritize scv because they'll continue repairing otherwise
+    UnitTypeId.GHOST: 7,
+    UnitTypeId.REAPER: 4,
+    UnitTypeId.MARAUDER: 4,
+    UnitTypeId.MARINE: 3,
+    UnitTypeId.CYCLONE: 5,
+    UnitTypeId.HELLION: 2,
+    UnitTypeId.HELLIONTANK: 3,
+    UnitTypeId.THOR: 5,
+    UnitTypeId.MEDIVAC: 6,
+    UnitTypeId.VIKINGFIGHTER: 5,
+    UnitTypeId.VIKINGASSAULT: 5,
+    UnitTypeId.LIBERATORAG: 9,
+    UnitTypeId.LIBERATOR: 5,
+    UnitTypeId.RAVEN: 10,
+    UnitTypeId.BATTLECRUISER: 8,
+    UnitTypeId.BANSHEE: 9,
+
+    UnitTypeId.MISSILETURRET: 1,
+    UnitTypeId.BUNKER: 2,
+
+    # Zerg
+    UnitTypeId.DRONE: 4,
+    UnitTypeId.ZERGLING: 3,
+    UnitTypeId.BANELING: 6,
+    UnitTypeId.ULTRALISK: 6,
+    UnitTypeId.QUEEN: 5,
+    UnitTypeId.ROACH: 6,
+    UnitTypeId.RAVAGER: 8,
+    UnitTypeId.HYDRALISK: 7,
+    UnitTypeId.HYDRALISKBURROWED: 7,
+    UnitTypeId.LURKERMP: 9,
+    UnitTypeId.LURKERMPBURROWED: 9,
+    UnitTypeId.INFESTOR: 10,
+    UnitTypeId.BROODLORD: 10,
+    UnitTypeId.MUTALISK: 6,
+    UnitTypeId.CORRUPTOR: 8,
+    UnitTypeId.INFESTEDTERRAN: 1,
+
+    UnitTypeId.LARVA: -1,
+    UnitTypeId.EGG: -1,
+    UnitTypeId.LOCUSTMP: -1,
+
+    # Protoss
+    UnitTypeId.SENTRY: 8,
+    UnitTypeId.PROBE: 4,
+    UnitTypeId.HIGHTEMPLAR: 10,
+    UnitTypeId.DARKTEMPLAR: 9,
+    UnitTypeId.ADEPT: 4,
+    UnitTypeId.ZEALOT: 4,
+    UnitTypeId.STALKER: 5,
+    UnitTypeId.IMMORTAL: 9,
+    UnitTypeId.COLOSSUS: 10,
+    UnitTypeId.ARCHON: 6,
+    UnitTypeId.WARPPRISM: 7,
+    UnitTypeId.PHOENIX: 3,
+    UnitTypeId.CARRIER: 10,
+    UnitTypeId.VOIDRAY: 8,
+    UnitTypeId.TEMPEST: 9,
+    UnitTypeId.INTERCEPTOR: -1,
+    UnitTypeId.CHANGELINGZEALOT: -1,
+
+    UnitTypeId.SHIELDBATTERY: 1,
+    UnitTypeId.PHOTONCANNON: 1,
+    UnitTypeId.PYLON: 2,
+    UnitTypeId.FLEETBEACON: 3,
+
+}
+
+
 class MicroSentries(GenericMicro):
     def __init__(self, knowledge):
         super().__init__(knowledge)
+        self.prio_dict = high_priority
         self.shield_up = False
         self.last_shield_up = 0  # Allows delay until another shield is used
         self.should_shield_up = False

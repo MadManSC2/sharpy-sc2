@@ -39,7 +39,7 @@ class GroupCombatManager(ManagerBase):
         self.unit_micros[UnitTypeId.ADEPT] = MicroAdepts(knowledge)
         self.unit_micros[UnitTypeId.CARRIER] = MicroCarriers(knowledge)
         self.unit_micros[UnitTypeId.COLOSSUS] = MicroColossi(knowledge)
-        self.unit_micros[UnitTypeId.DARKTEMPLAR] = MicroZerglings(knowledge)
+        self.unit_micros[UnitTypeId.DARKTEMPLAR] = MicroDarktemplars(knowledge)
         self.unit_micros[UnitTypeId.DISRUPTOR] = MicroDisruptor(knowledge)
         self.unit_micros[UnitTypeId.DISRUPTORPHASED] = MicroPurificationNova(knowledge)
         self.unit_micros[UnitTypeId.HIGHTEMPLAR] = MicroHighTemplars(knowledge)
@@ -229,6 +229,8 @@ class GroupCombatManager(ManagerBase):
         else:
             target = self.pather.find_path(group.center, target, 3)
         self.move_to(group, target, MoveType.Push)
+        # Whats better?
+        # self.move_to(group, target, MoveType.ReGroup)
 
     def move_to(self, group: CombatUnits, target, move_type: MoveType):
         self.action_to(group, target, move_type, False)

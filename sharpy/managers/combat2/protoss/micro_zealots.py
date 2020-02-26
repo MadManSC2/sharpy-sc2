@@ -8,10 +8,31 @@ from sc2.units import Units
 
 high_priority: Dict[UnitTypeId, int] = {
 
+    # Terran
+    UnitTypeId.MEDIVAC: -1,
+    UnitTypeId.VIKINGASSAULT: -1,
+    UnitTypeId.LIBERATORAG: -1,
+    UnitTypeId.LIBERATOR: -1,
+    UnitTypeId.RAVEN: -1,
+    UnitTypeId.BATTLECRUISER: -1,
+    UnitTypeId.BANSHEE: -1,
+
     # Zerg
     UnitTypeId.LARVA: -1,
     UnitTypeId.EGG: -1,
     UnitTypeId.LOCUSTMP: -1,
+    UnitTypeId.BROODLORD: -1,
+    UnitTypeId.MUTALISK: -1,
+    UnitTypeId.CORRUPTOR: -1,
+
+    # Protoss
+    UnitTypeId.WARPPRISM: -1,
+    UnitTypeId.PHOENIX: -1,
+    UnitTypeId.CARRIER: -1,
+    UnitTypeId.VOIDRAY: -1,
+    UnitTypeId.TEMPEST: -1,
+    UnitTypeId.INTERCEPTOR: -1,
+    UnitTypeId.CHANGELINGZEALOT: -1,
 
 }
 
