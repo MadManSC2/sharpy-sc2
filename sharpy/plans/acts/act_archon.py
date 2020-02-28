@@ -38,7 +38,7 @@ class ActArchon(ActBase):
             # Reserve upcoming archon so that they aren't stolen by other states.
             self.knowledge.roles.set_task(UnitTask.Reserved, unit)
             self.knowledge.roles.set_task(UnitTask.Reserved, target)
-            self.knowledge.print(f"[ARCHON] merging {str(unit.type_id)} and {str(unit.type_id)}")
+            self.knowledge.print(f"[ARCHON] merging {str(unit.tag)} and {str(target.tag)}")
 
             from s2clientprotocol import raw_pb2 as raw_pb
             from s2clientprotocol import sc2api_pb2 as sc_pb

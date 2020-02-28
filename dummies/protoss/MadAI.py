@@ -1,4 +1,53 @@
+"""
+- Version 1.3: Due to the current Rush/Cheese Meta, I implemented a more defensive build order and in return deactivated
+the 2-Base Immortal BO.
+
+- Version 1.4: Switched from randomly chosen build orders to scouting based build order. Yet, still not completely with
+a neural network but with basic rules, provided by a neural network.
+
+- Version 1.5: Added a simple neural network to chose build orders based on scouting information.
+Local tests with hundreds of games revealed that win rates compared to random choosing increased from 44% to 71%.
+Bots used locally: YoBot, Tyr, Tyrz, 5minBot, BlinkerBot, NaughtyBot, SarsaBot, SeeBot, ramu,
+Micromachine, Kagamine, AviloBot, EarlyAggro, Voidstar, ReeBot
+
+- Version 1.6: Adapted early game rush defense in order to deal better with 12 pools (e.g. by CheeZerg).
+Trained a new neural network with 730 games against the newest versions of most bots available.
+Also refined scouting on 4 player maps and tuned the late game emergency strategy to prevent ties.
+
+- Version 1.6.1: Bugfixes and new Model
+
+- Version 1.7: Added a One-Base defence into Void-Ray build in order to deal with other very aggressive builds
+
+- Version 1.7.1: Bugfixes and improved Voidray micro
+
+- Version 1.7.2: Newly trained model
+
+- Version 1.7.3 - 4: Small Bugfixes
+
+- Version 1.7.5: Slightly improved Rush defence
+
+- Version 1.8: Improved scouting with more scouting parameters, new model and various bug fixes / small improvements
+
+- Version 1.9: Improved building placement and attack priorities. Oracle harass for Stargate build
+
+- Version 2.0: Updated to Python 3.7.4 and to Burnys Python-sc2 vom 20.09.2019
+
+- Version 2.1: Switched to game_step = 4. Added a Random Forrest Classifier and a manual BO-Choice to the chat to compare the results with those of the DNN
+                Tried to increase survivalbility of the scout
+
+- Version 3.0: Complete rewrite of MadAI in the sharpy-sc2 framework developed by Infy & merfolk. Initially implemented 3 basic strategies, i.e.
+                4-Gate, 2-Base Robo and Defensive build, randomly chosen in order to gather training data
+
+- Version 3.1: Many minor improvements due to issues revealed in ladder replays. Addition of an automtic adaptive gateway unit selector,
+                based on a counter table. This should ensure that the gateway units are always the best composition with regards to the enemy units.
+
+- Version 3.2: Added the Skytoss build with an early Oracle Harass and follow-up Voidrays with Chargelots
+"""
+
 from sc2 import BotAI, UnitTypeId, AbilityId, Race
+from sc2.unit import Unit
+from sc2.position import Point2
+from sc2.constants import RALLY_UNITS
 from sc2.ids.upgrade_id import UpgradeId
 from sharpy.managers.roles import UnitTask
 from sharpy.knowledges import KnowledgeBot
@@ -8,11 +57,9 @@ from sharpy.plans.acts.protoss import *
 from sharpy.plans.require import *
 from sharpy.plans.tactics import *
 from sharpy.plans.tactics.protoss import *
-from sc2.position import Point2
-from sc2.constants import RALLY_UNITS
 from sharpy.managers.manager_base import ManagerBase
 
-
+from typing import List
 import random
 import numpy as np
 import time
@@ -236,24 +283,28 @@ class GetScoutingData(ActBase):
                 self.knowledge.enemy_army_predicter.enemy_mined_gas,
             ]
 
-            self.build_order = random.randrange(0, 3)
+            self.build_order = random.randrange(0, 4)
             print(self.scout_data)
 
             if self.build_order == 0:
                 await self.ai.chat_send(
-                    "(glhf) MadAI v3.0: 2-Base Robo BO chosen!"
+                    "(glhf) MadAI v3.2: 2-Base Robo BO chosen!"
                 )
             elif self.build_order == 1:
                 await self.ai.chat_send(
-                    "(glhf) MadAI v3.0: 4-Gate Proxy BO chosen!"
+                    "(glhf) MadAI v3.2: 4-Gate Proxy BO chosen!"
                 )
             elif self.build_order == 2:
                 await self.ai.chat_send(
-                    "(glhf) MadAI v3.0: Rush Defend BO chosen!"
+                    "(glhf) MadAI v3.2: Rush Defend BO chosen!"
+                )
+            elif self.build_order == 3:
+                await self.ai.chat_send(
+                    "(glhf) MadAI v3.2: Skytoss BO chosen!"
                 )
             else:
                 await self.ai.chat_send(
-                    "(glhf) MadAI v3.0: No BO chosen! PANIC!"
+                    "(glhf) MadAI v3.2: No BO chosen! PANIC!"
                 )
 
             return True
@@ -264,44 +315,133 @@ class GetScoutingData(ActBase):
 class Dt_Harass(ActBase):
     def __init__(self):
         super().__init__()
+        self.dts_detected = False
+        self.already_merging_tags: List[int] = []
 
     async def execute(self) -> bool:
+        if (self.cache.own(UnitTypeId.DARKTEMPLAR).ready and not self.dts_detected and self.cache.own(UnitTypeId.DARKTEMPLAR).ready.random.shield < 60) or \
+                (len(self.knowledge.known_enemy_units(UnitTypeId.PHOTONCANNON)) > 0 and not self.dts_detected) or \
+                (len(self.knowledge.known_enemy_units(UnitTypeId.SPINECRAWLER)) > 0 and not self.dts_detected) or \
+                (len(self.knowledge.known_enemy_units(UnitTypeId.MISSILETURRET)) > 0 and not self.dts_detected) or \
+                (len(self.knowledge.known_enemy_units(UnitTypeId.OVERSEER)) > 0 and not self.dts_detected):
+            # Don't even start the harass if the enemy has some sort of detection
+            self.dts_detected = True
+            for dt in self.cache.own(UnitTypeId.DARKTEMPLAR):
+                # Get back to the gather point to be morphed to Archons savely
+                self.do(dt.move(self.knowledge.gather_point))
+            print('DTs detected!!')
         # Start dark templar attack
-        if self.cache.own(UnitTypeId.DARKTEMPLAR).exists:
-            dt1 = self.cache.own(UnitTypeId.DARKTEMPLAR)[0]
-            self.do(
-                dt1(
-                    RALLY_UNITS,
-                    self.knowledge.expansion_zones[-1].mineral_line_center,
-                )
-            )
-            self.knowledge.roles.set_task(UnitTask.Reserved, dt1)
-            if len(self.cache.own(UnitTypeId.DARKTEMPLAR)) > 1:
-                dt2 = self.cache.own(UnitTypeId.DARKTEMPLAR)[1]
+        if not self.dts_detected:
+            if self.cache.own(UnitTypeId.DARKTEMPLAR).exists:
+                dt1 = self.cache.own(UnitTypeId.DARKTEMPLAR)[0]
                 self.do(
-                    dt2(
+                    dt1(
                         RALLY_UNITS,
-                        self.knowledge.expansion_zones[-2].mineral_line_center,
+                        self.knowledge.expansion_zones[-1].mineral_line_center,
                     )
                 )
-                self.knowledge.roles.set_task(UnitTask.Reserved, dt2)
-            enemy_workers = self.knowledge.known_enemy_units.of_type(
-                [UnitTypeId.SCV, UnitTypeId.PROBE, UnitTypeId.DRONE, UnitTypeId.MULE])
-            for dt in self.cache.own(UnitTypeId.DARKTEMPLAR).idle:
-                if self.knowledge.known_enemy_structures.of_type(UnitTypeId.SPORECRAWLER).exists:
+                self.knowledge.roles.set_task(UnitTask.Reserved, dt1)
+                if len(self.cache.own(UnitTypeId.DARKTEMPLAR)) > 1:
+                    dt2 = self.cache.own(UnitTypeId.DARKTEMPLAR)[1]
                     self.do(
-                        dt.attack(
-                            self.knowledge.known_enemy_structures.of_type(UnitTypeId.SPORECRAWLER).closest_to(dt.position)
+                        dt2(
+                            RALLY_UNITS,
+                            self.knowledge.expansion_zones[-2].mineral_line_center,
                         )
                     )
-                elif enemy_workers.exists:
-                    self.do(
-                        dt.attack(
-                            enemy_workers.closest_to(dt.position)
+                    self.knowledge.roles.set_task(UnitTask.Reserved, dt2)
+                enemy_workers = self.knowledge.known_enemy_units.of_type(
+                    [UnitTypeId.SCV, UnitTypeId.PROBE, UnitTypeId.DRONE, UnitTypeId.MULE])
+                for dt in self.cache.own(UnitTypeId.DARKTEMPLAR).idle:
+                    if self.knowledge.known_enemy_structures.of_type(UnitTypeId.SPORECRAWLER).exists:
+                        self.do(
+                            dt.attack(
+                                self.knowledge.known_enemy_structures.of_type(UnitTypeId.SPORECRAWLER).closest_to(dt.position)
+                            )
                         )
+                    elif enemy_workers.exists:
+                        self.do(
+                            dt.attack(
+                                enemy_workers.closest_to(dt.position)
+                            )
+                        )
+                    else:
+                        self.do(dt.attack(self.knowledge.known_enemy_units.closest_to(dt.position)))
+        else:
+            if len(self.ai.units(UnitTypeId.DARKTEMPLAR).ready.closer_than(10, self.knowledge.gather_point)) >= 2:
+                # Only morph Archons when its safe, i.e. at the current gather point
+                templars = self.cache.own(UnitTypeId.DARKTEMPLAR).ready.tags_not_in(self.already_merging_tags)
+                if templars.amount > 1:
+                    unit: Unit = templars[0]
+                    self.already_merging_tags.append(unit.tag)
+                    target: Unit = templars.tags_not_in(self.already_merging_tags).closest_to(unit)
+                    self.already_merging_tags.append(target.tag)
+                    self.knowledge.roles.set_task(UnitTask.Reserved, unit)
+                    self.knowledge.roles.set_task(UnitTask.Reserved, target)
+                    self.knowledge.print(f"[ARCHON] merging {str(unit.tag)} and {str(target.tag)}")
+                    from s2clientprotocol import raw_pb2 as raw_pb
+                    from s2clientprotocol import sc2api_pb2 as sc_pb
+                    command = raw_pb.ActionRawUnitCommand(
+                        ability_id=AbilityId.MORPH_ARCHON.value,
+                        unit_tags=[unit.tag, target.tag],
+                        queue_command=False
                     )
-                else:
-                    self.do(dt.attack(self.knowledge.known_enemy_units.closest_to(dt.position)))
+                    action = raw_pb.ActionRaw(unit_command=command)
+                    await self.ai._client._execute(action=sc_pb.RequestAction(
+                        actions=[sc_pb.Action(action_raw=action)]
+                    ))
+
+        return True
+
+
+class Oracle_Harass(ActBase):
+    def __init__(self):
+        super().__init__()
+        self.harass_started = False
+        self.do_something_after_travel = 0
+
+    async def execute(self) -> bool:
+        if len(self.ai.units(UnitTypeId.ORACLE)) >= 1 and not self.harass_started:
+            self.save_target_main = self.knowledge.enemy_start_location.towards(self.knowledge.ai.game_info.map_center,
+                                                                               -25)
+            # print('X:', self.knowledge.ai.game_info.map_center[0] - self.knowledge.ai.start_location[0], 'Y:',
+            #       self.knowledge.ai.game_info.map_center[1] - self.knowledge.ai.start_location[1])
+            if self.knowledge.ai.game_info.map_center[0] - self.knowledge.ai.start_location[0] < 0:
+                self.safe_spot1 = 1
+            else:
+                self.safe_spot1 = (self.knowledge.ai.game_info.map_center[0] * 2) - 1
+            if self.knowledge.ai.game_info.map_center[1] - self.knowledge.ai.start_location[1] > 0:
+                self.safe_spot2 = 1
+            else:
+                self.safe_spot2 = (self.knowledge.ai.game_info.map_center[1] * 2) - 1
+            or1 = self.ai.units(UnitTypeId.ORACLE)[0]
+            self.knowledge.roles.set_task(UnitTask.Reserved, or1)
+            self.do(or1.move(Point2((self.safe_spot1, self.safe_spot2))))
+            self.do(or1.move(self.save_target_main, queue=True))
+            self.harass_started = True
+            self.do_something_after_travel = self.ai.time + 50
+        elif len(self.ai.units(UnitTypeId.ORACLE)) >= 1 and self.harass_started:
+            if self.ai.time > self.do_something_after_travel:
+                or1 = self.ai.units(UnitTypeId.ORACLE)[0]
+                self.knowledge.roles.set_task(UnitTask.Reserved, or1)
+                attack_target_main = self.ai.enemy_start_locations[0].towards(self.ai.game_info.map_center, -5)
+                save_target_main = self.ai.enemy_start_locations[0].towards(self.ai.game_info.map_center, -25)
+                if or1.shield_percentage > 0.5 and or1.energy_percentage > 0.25:
+                    workers = self.knowledge.ai.enemy_units.of_type({UnitTypeId.DRONE, UnitTypeId.PROBE, UnitTypeId.SCV})
+                    if workers:
+                        self.do(or1.attack(workers.closest_to(or1.position)))
+                        self.ai.do(or1(AbilityId.BEHAVIOR_PULSARBEAMON, queue=True))
+                    else:
+                        self.do(or1.attack(attack_target_main))
+                        self.ai.do(or1(AbilityId.BEHAVIOR_PULSARBEAMON, queue=True))
+
+                    # self.do(or1(BUILD_STASISTRAP, attack_target_main))
+                    # self.do_something_after_trap1 = self.time + 20
+                    # self.do_something_after_trap2 = self.time + 10
+                elif or1.shield_percentage < 0.1 or or1.energy_percentage < 0.02:
+                    self.do(or1(AbilityId.BEHAVIOR_PULSARBEAMOFF))
+                    self.ai.do(or1.move(save_target_main, queue=True))
+                    print('Moving out again')
 
         return True
 
@@ -406,7 +546,9 @@ class MadAI(KnowledgeBot):
         #TODO: Reenable Defence when Retreating
         #TODO: Ignore Hallucinations
         #TODO: Add time depended scouting variables, e.g. hatch before pool, etc.
-        #TODO: Use the Phenoix-Scout-Info to make the attack trigger more flexible, based on the power difference
+        #TODO: Use the Phoenix-Scout-Info to make the attack trigger more flexible, based on the power difference
+        #TODO: Position Rallypoint behind natural wall on Discobloodbath
+        #TODO: Move the builder probe towards the expansion already before minerals are at 400 just as it is done in BuildPosition
         return BuildOrder([
             Step(None, ChronoUnitProduction(UnitTypeId.PROBE, UnitTypeId.NEXUS),
                  skip=RequiredUnitExists(UnitTypeId.PROBE, 19, include_pending=True), skip_until=RequiredUnitReady(UnitTypeId.PYLON, 1)),
@@ -430,7 +572,8 @@ class MadAI(KnowledgeBot):
             ]),
             Step(lambda k: self.scout.build_order == 0, self.two_base_robo()),
             Step(lambda k: self.scout.build_order == 1, self.four_gate()),
-            Step(lambda k: self.scout.build_order == 2, self.defend()),
+            Step(lambda k: self.scout.build_order == 2, self.defend_dt()),
+            Step(lambda k: self.scout.build_order == 3, self.skytoss()),
             SequentialList([
                 Step(None, PlanZoneDefense(), skip=RequiredUnitReady(UnitTypeId.PROBE, 23)),
                 RestorePower(),
@@ -440,9 +583,9 @@ class MadAI(KnowledgeBot):
         ])
 
     def four_gate(self) -> ActBase:
-        #TODO: Adapt Unit Composition, Follow-up BO
+        #TODO: Follow-up BO
         random_location = random.randrange(0, 2)
-        if random_location == 0:
+        if random_location == 0 and not self.knowledge.enemy_race == Race.Zerg:
             natural = self.knowledge.expansion_zones[-3]
             pylon_pos: Point2 = natural.mineral_line_center.towards(
                     self.knowledge.expansion_zones[-3].behind_mineral_position_center, -5)
@@ -458,8 +601,8 @@ class MadAI(KnowledgeBot):
                         ActTech(UpgradeId.WARPGATERESEARCH, UnitTypeId.CYBERNETICSCORE),
                         ProtossUnit(UnitTypeId.STALKER, 1, priority=True),
                         GridBuilding(UnitTypeId.GATEWAY, 3),
-                        BuildPosition(UnitTypeId.PYLON, pylon_pos, exact=False,
-                                      only_once=True),
+                        Step(RequiredTechReady(UpgradeId.WARPGATERESEARCH, 0.4), BuildPosition(UnitTypeId.PYLON, pylon_pos,
+                                                exact=False, only_once=True)),
                         GridBuilding(UnitTypeId.GATEWAY, 4),
                         [
                             Step(None, ProtossUnit(UnitTypeId.SENTRY, 1),
@@ -479,13 +622,13 @@ class MadAI(KnowledgeBot):
                 Step(None, PlanZoneDefense(), skip=RequiredUnitReady(UnitTypeId.STALKER, 4)),
                 PlanZoneGather(),
                 # Step(RequiredUnitReady(UnitTypeId.GATEWAY, 4), PlanZoneGather()),
-                PlanZoneAttack(12),
+                PlanZoneAttack(16),
                 PlanFinishEnemy(),
             ])
         ])
 
     def two_base_robo(self) -> ActBase:
-        #TODO: Adapt Unit Composition, Archons as follow-up after first push (ActArchon)
+        #TODO: Archons as follow-up after first push (ActArchon)
         pylon_pos = self.knowledge.ai.game_info.map_center.position
         attack = PlanZoneAttack(12)
         attack.enemy_power_multiplier = 0.8  # Attack even if it might be a bad idea
@@ -539,7 +682,7 @@ class MadAI(KnowledgeBot):
                          ProtossUnit(UnitTypeId.IMMORTAL, 20, priority=True)),
                     Step(RequiredUnitReady(UnitTypeId.ROBOTICSFACILITY, 1), ProtossUnit(UnitTypeId.ZEALOT, 7),
                          skip=RequiredUnitExists(UnitTypeId.TWILIGHTCOUNCIL, 1)),
-                    Step(RequiredUnitReady(UnitTypeId.SENTRY, 4), ProtossUnit(UnitTypeId.ZEALOT, 50)),
+                    Step(RequiredUnitReady(UnitTypeId.SENTRY, 4), GateUnit()),
 
                 ]),
             SequentialList([
@@ -557,8 +700,8 @@ class MadAI(KnowledgeBot):
             ])
         ])
 
-    def defend(self) -> ActBase:
-        #TODO: Morph DTs into Archons if detected, Proxy-Pylon for DTs only, Follow-Up
+    def defend_dt(self) -> ActBase:
+        #TODO: Proxy-Pylon for DTs only, Follow-Up
         #TODO: Give DTs something to do if everything is dead near them
         pylon_pos = self.knowledge.ai.game_info.map_center.position
         if self.knowledge.enemy_race == Race.Zerg:
@@ -605,12 +748,12 @@ class MadAI(KnowledgeBot):
             [
                 AutoPylon(),
                 Step(RequiredUnitReady(UnitTypeId.DARKSHRINE, 1), ProtossUnit(UnitTypeId.DARKTEMPLAR, 3, priority=True),
-                     skip_until=RequiredUnitReady(UnitTypeId.DARKSHRINE, 1), skip=RequiredTechReady(UpgradeId.CHARGE)),
-                Step(RequiredUnitReady(UnitTypeId.DARKSHRINE, 1), ProtossUnit(UnitTypeId.ZEALOT, 40)),
+                     skip_until=RequiredUnitReady(UnitTypeId.DARKSHRINE, 1), skip=(RequiredUnitReady(UnitTypeId.DARKTEMPLAR, 1) or RequiredUnitExists(UnitTypeId.ARCHON, 1))),
+                Step(RequiredUnitReady(UnitTypeId.DARKSHRINE, 1), GateUnit()),
                 Step(RequiredUnitReady(UnitTypeId.DARKSHRINE, 1), ProtossUnit(UnitTypeId.SENTRY, 5)),
             ],
             SequentialList([
-                Step(RequiredUnitReady(UnitTypeId.DARKTEMPLAR, 3), ActTech(UpgradeId.CHARGE, UnitTypeId.TWILIGHTCOUNCIL)),
+                Step(RequiredUnitReady(UnitTypeId.DARKTEMPLAR, 2), ActTech(UpgradeId.CHARGE, UnitTypeId.TWILIGHTCOUNCIL)),
                 Step(RequiredUnitReady(UnitTypeId.DARKTEMPLAR, 3), ActTech(UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1, UnitTypeId.FORGE)),
                 Step(RequiredTechReady(UpgradeId.CHARGE, 0.1),
                      BuildPosition(UnitTypeId.PYLON, pylon_pos, exact=False, only_once=True))
@@ -621,11 +764,85 @@ class MadAI(KnowledgeBot):
                 ChronoAnyTech(0)
             ]),
             SequentialList([
-                # Stop Defending when attacking, i.e. Base-Trade
-                Step(None, PlanZoneDefense(), skip=RequiredTechReady(UpgradeId.CHARGE)),
-                PlanZoneGather(),
-                Step(RequiredUnitReady(UnitTypeId.DARKSHRINE, 1), Dt_Harass(), skip=RequiredTechReady(UpgradeId.CHARGE)),
+                PlanZoneDefense(),
+                Step(None, PlanZoneGather(), skip=RequiredUnitReady(UnitTypeId.DARKSHRINE, 1)),
+                Step(RequiredUnitReady(UnitTypeId.DARKSHRINE, 1), Dt_Harass()), # skip=RequiredTechReady(UpgradeId.CHARGE)),
+                Step(RequiredTechReady(UpgradeId.CHARGE, 0.8), PlanZoneGather()),
                 Step(RequiredTechReady(UpgradeId.CHARGE), attack),
+                PlanFinishEnemy(),
+            ])
+        ])
+
+    def skytoss(self) -> ActBase:
+        #TODO: Follow-up
+        #TODO: Don't suicide the Oracle if there are units already waiting
+        natural_pylon_pos = self.knowledge.expansion_zones[1].mineral_line_center.towards(
+                self.knowledge.expansion_zones[1].behind_mineral_position_center, -12)
+
+        attack = PlanZoneAttack(12)
+        attack.enemy_power_multiplier = 0.8  # Attack even if it might be a bad idea
+        return BuildOrder([
+            SequentialList([
+                ActExpand(2),
+                ProtossUnit(UnitTypeId.STALKER, 1),
+                BuildPosition(UnitTypeId.PYLON, natural_pylon_pos, exact=False, only_once=True),
+                Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 24)),
+                GridBuilding(UnitTypeId.STARGATE, 1),
+                Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 25)),
+                ProtossUnit(UnitTypeId.SENTRY, 1),
+                BuildPosition(UnitTypeId.SHIELDBATTERY, natural_pylon_pos, exact=False, only_once=True),
+                Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 26)),
+                ProtossUnit(UnitTypeId.ZEALOT, 2),
+                BuildOrder(
+                    [
+                        Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 28)),
+                        SequentialList([
+                            Step(RequiredUnitReady(UnitTypeId.SENTRY, 1), HallucinatedPhoenixScout()),
+                            Step(RequiredUnitReady(UnitTypeId.SENTRY, 1), PlanHallucination()),
+                        ])
+                    ]),
+                Step(RequiredUnitReady(UnitTypeId.STARGATE, 1), ProtossUnit(UnitTypeId.ORACLE, 1, priority=True)),
+                ActTech(UpgradeId.WARPGATERESEARCH, UnitTypeId.CYBERNETICSCORE),
+                Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 30)),
+                ProtossUnit(UnitTypeId.ZEALOT, 3),
+                Step(RequiredUnitReady(UnitTypeId.STARGATE, 1), ProtossUnit(UnitTypeId.VOIDRAY, 1)),
+                Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 32)),
+                StepBuildGas(3),
+                ProtossUnit(UnitTypeId.ZEALOT, 4),
+                Step(RequiredUnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.TWILIGHTCOUNCIL, 1)),
+                Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 34)),
+                Step(RequiredUnitReady(UnitTypeId.STARGATE, 1), ProtossUnit(UnitTypeId.VOIDRAY, 2)),
+                GridBuilding(UnitTypeId.STARGATE, 2),
+                Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 36)),
+                StepBuildGas(4),
+                Step(RequiredUnitReady(UnitTypeId.VOIDRAY, 1), ActTech(UpgradeId.PROTOSSAIRWEAPONSLEVEL1, UnitTypeId.CYBERNETICSCORE)),
+                ProtossUnit(UnitTypeId.ZEALOT, 5),
+                Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 38)),
+                Step(RequiredUnitReady(UnitTypeId.STARGATE, 1), ProtossUnit(UnitTypeId.VOIDRAY, 3)),
+                Step(RequiredUnitReady(UnitTypeId.TWILIGHTCOUNCIL, 1), ActTech(UpgradeId.CHARGE, UnitTypeId.TWILIGHTCOUNCIL)),
+                GridBuilding(UnitTypeId.GATEWAY, 2),
+                Step(RequiredGas(300), GridBuilding(UnitTypeId.STARGATE, 3)),
+            ]),
+            BuildOrder(
+                [
+                    AutoPylon(),
+                    Step(RequiredUnitReady(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 44)),
+                    Step(RequiredUnitReady(UnitTypeId.VOIDRAY, 1), ProtossUnit(UnitTypeId.VOIDRAY, 20, priority=True)),
+                    Step(RequiredUnitReady(UnitTypeId.STARGATE, 2), ProtossUnit(UnitTypeId.ZEALOT, 50)),
+                    Step(RequiredTechReady(UpgradeId.PROTOSSAIRWEAPONSLEVEL1),
+                         ActTech(UpgradeId.PROTOSSAIRARMORSLEVEL1, UnitTypeId.CYBERNETICSCORE)),
+                ]),
+            SequentialList([
+                ChronoUnitProduction(UnitTypeId.STALKER, UnitTypeId.GATEWAY),
+                ChronoUnitProduction(UnitTypeId.ORACLE, UnitTypeId.STARGATE),
+                ChronoAnyTech(0)
+            ]),
+            SequentialList([
+                # Stop Defending when attacking, i.e. Base-Trade
+                Step(None, PlanZoneDefense(), skip=RequiredTechReady(UpgradeId.PROTOSSAIRWEAPONSLEVEL1, 0.9)),
+                PlanZoneGather(),
+                Step(RequiredUnitReady(UnitTypeId.ORACLE, 1), Oracle_Harass()),
+                Step(RequiredTechReady(UpgradeId.PROTOSSAIRWEAPONSLEVEL1, 0.9), attack),
                 PlanFinishEnemy(),
             ])
         ])
@@ -681,6 +898,7 @@ class MadAI(KnowledgeBot):
                 PlanFinishEnemy(),
             ])
         ])
+
 
 class LadderBot(MadAI):
     @property
