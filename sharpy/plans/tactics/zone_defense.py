@@ -24,7 +24,7 @@ class PlanZoneDefense(ActBase):
         self.zone_seen_enemy: Dict[int, float] = dict()
 
         self.defend_fighting_scout = False
-        self.back_home = False
+        # self.back_home = False
 
     async def start(self, knowledge: Knowledge):
         await super().start(knowledge)
@@ -55,7 +55,7 @@ class PlanZoneDefense(ActBase):
             # Let's loop zone starting from our main, which is the one we want to defend the most
             # Check that zone is either in our control or is our start location that has no Nexus
             if zone_defenders.exists or zone.is_ours or zone == self.knowledge.own_main_zone:
-                if not self.defense_required(enemies) and not self.back_home:
+                if not self.defense_required(enemies): # and not self.back_home:
                     # Delay before removing defenses in case we just lost visibility of the enemies
                     if zone.last_scouted_center == self.knowledge.ai.time \
                             or self.zone_seen_enemy[i] + PlanZoneDefense.ZONE_CLEAR_TIMEOUT < self.ai.time:
@@ -63,25 +63,25 @@ class PlanZoneDefense(ActBase):
                         zone_defenders.clear()
                         zone_tags.clear()
                         continue  # Zone is well under control.
-                elif not self.defense_required(enemies) and self.back_home:
-                    # Stop units being lured out separately by chasing some attackers to far when defending
-                    print('Back to Base')
-                    self.back_home = False
-                    for se in self.ai.units(UnitTypeId.SENTRY):
-                        self.do(se.attack(zone.gather_point))
-                    for st in self.ai.units(UnitTypeId.STALKER):
-                        self.do(st.attack(zone.gather_point))
-                    for zl in self.ai.units(UnitTypeId.ZEALOT):
-                        self.do(zl.attack(zone.gather_point))
-                    for im in self.ai.units(UnitTypeId.IMMORTAL):
-                        self.do(im.attack(zone.gather_point))
+                # elif not self.defense_required(enemies) and self.back_home:
+                #     # Stop units being lured out separately by chasing some attackers to far when defending
+                #     print('Back to Base')
+                #     self.back_home = False
+                #     for se in self.ai.units(UnitTypeId.SENTRY):
+                #         self.do(se.attack(zone.gather_point))
+                #     for st in self.ai.units(UnitTypeId.STALKER):
+                #         self.do(st.attack(zone.gather_point))
+                #     for zl in self.ai.units(UnitTypeId.ZEALOT):
+                #         self.do(zl.attack(zone.gather_point))
+                #     for im in self.ai.units(UnitTypeId.IMMORTAL):
+                #         self.do(im.attack(zone.gather_point))
                 else:
                     self.zone_seen_enemy[i] = self.ai.time
 
                 if enemies.exists:
                     # enemy_center = zone.assaulting_enemies.center
                     enemy_center = enemies.closest_to(zone.center_location).position
-                    self.back_home = True
+                    # self.back_home = True
                 elif zone.assaulting_enemies:
                     enemy_center = zone.assaulting_enemies.closest_to(zone.center_location).position
                 else:
