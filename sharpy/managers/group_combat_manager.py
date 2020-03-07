@@ -52,6 +52,7 @@ class GroupCombatManager(ManagerBase):
         self.unit_micros[UnitTypeId.VOIDRAY] = MicroVoidrays(knowledge)
         self.unit_micros[UnitTypeId.ZEALOT] = MicroZealots(knowledge)
         self.unit_micros[UnitTypeId.IMMORTAL] = MicroImmortals(knowledge)
+        self.unit_micros[UnitTypeId.TEMPEST] = MicroTempests(knowledge)
 
         # Zerg
         self.unit_micros[UnitTypeId.ZERGLING] = MicroZerglings(knowledge)

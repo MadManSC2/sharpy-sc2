@@ -13,3 +13,4 @@ from .micro_sentries import MicroSentries
 from .micro_warp_prism import MicroWarpPrism
 from .micro_immortals import MicroImmortals
 from .micro_darktemplars import MicroDarktemplars
+from .micro_tempests import MicroTempests
