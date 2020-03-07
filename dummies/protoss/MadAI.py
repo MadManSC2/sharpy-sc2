@@ -42,6 +42,16 @@ Also refined scouting on 4 player maps and tuned the late game emergency strateg
                 based on a counter table. This should ensure that the gateway units are always the best composition with regards to the enemy units.
 
 - Version 3.2: Added the Skytoss build with an early Oracle Harass and follow-up Voidrays with Chargelots
+
+- Version 3.3: Added the (rather messy) neural network and random forrest classifier from MadAI 2.1 for build order choices
+
+- Version 3.3.1: Changed the Skytoss BO from Voidrays to Tempests
+
+- Version 3.4: Account for losses with a specific build order by having separate models trained with lost games.
+                Computation of the final prediction by substracting win prediction - loss prediction for both models and
+                all four build orders. Then taking the build order with the highest results. If an overall prediction for
+                a specific build order has a positive value, it is more likely to win with that, while if it has a neagtive value
+                it is more likely to lose with it.
 """
 
 from sc2 import BotAI, UnitTypeId, AbilityId, Race
@@ -63,6 +73,8 @@ from typing import List
 import random
 import numpy as np
 import time
+import pickle
+import keras
 
 
 class GetScoutingData(ActBase):
@@ -70,6 +82,14 @@ class GetScoutingData(ActBase):
         super().__init__()
         self.build_order = -1
         self.scout_data = []
+        self.use_model = False
+
+        if self.use_model:
+            self.model = keras.models.load_model("MadAI/MadAI_06_03_2020")
+            self.model_loss = keras.models.load_model("MadAI/MadAI_06_03_2020_loss")
+            self.RF_model = pickle.load(open('MadAI/MadAI_RF_06_03_2020.sav', 'rb'))
+            self.RF_model_loss = pickle.load(open('MadAI/MadAI_RF_06_03_2020_loss.sav', 'rb'))
+            self.choice_data = []
 
     async def start(self, knowledge: 'Knowledge'):
         await super().start(knowledge)
@@ -283,28 +303,184 @@ class GetScoutingData(ActBase):
                 self.knowledge.enemy_army_predicter.enemy_mined_gas,
             ]
 
-            self.build_order = random.randrange(0, 4)
-            print(self.scout_data)
+            if self.use_model:
+                self.choice_data = [
+                    self.scout_data[0][0]+self.scout_data[0][1],
+                    self.scout_data[1],
+                    self.scout_data[2],
+                    self.scout_data[3],
+                    self.scout_data[4],
+                    self.scout_data[5],
+                    self.scout_data[6],
+                    self.scout_data[7],
+                    self.scout_data[8],
+                    self.scout_data[9],
+                    self.scout_data[10],
+                    self.scout_data[11],
+                    self.scout_data[12],
+                    self.scout_data[13],
+                    self.scout_data[14],
+                    self.scout_data[15],
+                    self.scout_data[16],
+                    self.scout_data[17],
+                    self.scout_data[18],
+                    self.scout_data[19],
+                    self.scout_data[20],
+                    self.scout_data[21],
+                    self.scout_data[22],
+                    self.scout_data[23],
+                    self.scout_data[24],
+                    self.scout_data[25],
+                    self.scout_data[26],
+                    self.scout_data[27],
+                    self.scout_data[28],
+                    self.scout_data[29],
+                    self.scout_data[30],
+                    self.scout_data[31],
+                    self.scout_data[32],
+                    self.scout_data[33],
+                    self.scout_data[34],
+                    self.scout_data[35],
+                    self.scout_data[36],
+                    self.scout_data[37],
+                    self.scout_data[38],
+                    self.scout_data[39],
+                    self.scout_data[40],
+                    self.scout_data[41],
+                    self.scout_data[42],
+                    self.scout_data[43],
+                    self.scout_data[44],
+                    self.scout_data[45],
+                    self.scout_data[46],
+                    self.scout_data[47],
+                    self.scout_data[48],
+                    self.scout_data[49],
+                    self.scout_data[50],
+                    self.scout_data[51],
+                    self.scout_data[52],
+                    self.scout_data[53],
+                    self.scout_data[54],
+                    self.scout_data[55],
+                    self.scout_data[56],
+                    self.scout_data[57],
+                    self.scout_data[58],
+                    self.scout_data[59],
+                    self.scout_data[60],
+                    self.scout_data[61],
+                    self.scout_data[62],
+                    self.scout_data[63],
+                ]
+
+                # print(self.choice_data)
+                new_choice_data = np.array(self.choice_data).reshape(-1, 64, 1)
+                # print(new_choice_data)
+
+                prediction = self.model.predict(new_choice_data)
+                prediction_loss = self.model_loss.predict(new_choice_data)
+                # print(prediction[0])
+                RF_predictions = self.RF_model.predict_proba([self.choice_data])
+                RF_predictions_loss = self.RF_model_loss.predict_proba([self.choice_data])
+
+                # if len(self.knowledge.known_enemy_units(UnitTypeId.NEXUS)) > 1 or \
+                #         len(self.knowledge.known_enemy_units(UnitTypeId.COMMANDCENTER)) > 1 or \
+                #         len(self.knowledge.known_enemy_units(UnitTypeId.COMMANDCENTER)) + \
+                #         len(self.knowledge.known_enemy_units(UnitTypeId.ORBITALCOMMAND)) > 1:
+                #     manual_0 = 0
+                #     manual_1 = 1
+                #     manual_2 = 0
+                #     manual_3 = 0
+                # elif len(self.knowledge.known_enemy_units(UnitTypeId.GATEWAY)) > 2 or \
+                #         len(self.knowledge.known_enemy_units(UnitTypeId.BARRACKS)) > 2 or \
+                #         self.knowledge.enemy_units_manager.unit_count(UnitTypeId.ZERGLING) > 2:
+                #     manual_0 = 0
+                #     manual_1 = 0
+                #     manual_2 = 1
+                #     manual_3 = 0
+                # elif len(self.knowledge.known_enemy_units(UnitTypeId.SPINECRAWLER)) > 0 or \
+                #         len(self.knowledge.known_enemy_units(UnitTypeId.PHOTONCANNON)) > 0 or \
+                #         len(self.knowledge.known_enemy_units(UnitTypeId.BUNKER)) > 0 or \
+                #         len(self.knowledge.known_enemy_units(UnitTypeId.FORGE)) > 0:
+                #     manual_0 = 0.5
+                #     manual_1 = 0
+                #     manual_2 = 0
+                #     manual_3 = 0.5
+                # else:
+                #     manual_0 = 0.25
+                #     manual_1 = 0.25
+                #     manual_2 = 0.25
+                #     manual_3 = 0.25
+
+                await self.ai.chat_send(
+                    "2-Base Robo: ["
+                    + str(round(prediction[0][0] * 100, 2))
+                    + " - "
+                    + str(round(prediction_loss[0][0] * 100, 2))
+                    + " / "
+                    + str(round(RF_predictions[0][0] * 100, 2))
+                    + " - "
+                    + str(round(RF_predictions_loss[0][0] * 100, 2))
+                    + " / "
+                    + str(round((prediction[0][0] - prediction_loss[0][0] + RF_predictions[0][0] - RF_predictions_loss[0][0]) * 100 / 2, 2))
+                    + "]; 4-Gate Proxy: ["
+                    + str(round(prediction[0][1] * 100, 2))
+                    + " - "
+                    + str(round(prediction_loss[0][1] * 100, 2))
+                    + " / "
+                    + str(round(RF_predictions[0][1] * 100, 2))
+                    + " - "
+                    + str(round(RF_predictions_loss[0][1] * 100, 2))
+                    + " / "
+                    + str(round((prediction[0][1] - prediction_loss[0][1] + RF_predictions[0][1] - RF_predictions_loss[0][1]) * 100 / 2, 2))
+                    + "]; Rush Defend: ["
+                    + str(round(prediction[0][2] * 100, 2))
+                    + " - "
+                    + str(round(prediction_loss[0][2] * 100, 2))
+                    + " / "
+                    + str(round(RF_predictions[0][2] * 100, 2))
+                    + " - "
+                    + str(round(RF_predictions_loss[0][2] * 100, 2))
+                    + " / "
+                    + str(round((prediction[0][2] - prediction_loss[0][2] + RF_predictions[0][2] - RF_predictions_loss[0][2]) * 100 / 2, 2))
+                    + "]; Skytoss: ["
+                    + str(round(prediction[0][3] * 100, 2))
+                    + " - "
+                    + str(round(prediction_loss[0][3] * 100, 2))
+                    + " / "
+                    + str(round(RF_predictions[0][3] * 100, 2))
+                    + " - "
+                    + str(round(RF_predictions_loss[0][3] * 100, 2))
+                    + " / "
+                    + str(round((prediction[0][3] - prediction_loss[0][3] + RF_predictions[0][3] - RF_predictions_loss[0][3]) * 100 / 2, 2))
+                    + "]"
+                )
+                choice = np.argmax([round((prediction[0][0] - prediction_loss[0][0] + RF_predictions[0][0] - RF_predictions_loss[0][0]) * 100 / 2, 2),
+                                    round((prediction[0][1] - prediction_loss[0][1] + RF_predictions[0][1] - RF_predictions_loss[0][1]) * 100 / 2, 2),
+                                    round((prediction[0][2] - prediction_loss[0][2] + RF_predictions[0][2] - RF_predictions_loss[0][2]) * 100 / 2, 2),
+                                    round((prediction[0][3] - prediction_loss[0][3] + RF_predictions[0][3] - RF_predictions_loss[0][3]) * 100 / 2, 2)])
+                self.build_order = choice
+
+            else:
+                self.build_order = random.randrange(0, 4)
 
             if self.build_order == 0:
                 await self.ai.chat_send(
-                    "(glhf) MadAI v3.2: 2-Base Robo BO chosen!"
+                    "(glhf) MadAI v3.4: 2-Base Robo BO chosen!"
                 )
             elif self.build_order == 1:
                 await self.ai.chat_send(
-                    "(glhf) MadAI v3.2: 4-Gate Proxy BO chosen!"
+                    "(glhf) MadAI v3.4: 4-Gate Proxy BO chosen!"
                 )
             elif self.build_order == 2:
                 await self.ai.chat_send(
-                    "(glhf) MadAI v3.2: Rush Defend BO chosen!"
+                    "(glhf) MadAI v3.4: Rush Defend BO chosen!"
                 )
             elif self.build_order == 3:
                 await self.ai.chat_send(
-                    "(glhf) MadAI v3.2: Skytoss BO chosen!"
+                    "(glhf) MadAI v3.4: Skytoss BO chosen!"
                 )
             else:
                 await self.ai.chat_send(
-                    "(glhf) MadAI v3.2: No BO chosen! PANIC!"
+                    "(glhf) MadAI v3.4: No BO chosen! PANIC!"
                 )
 
             return True
@@ -313,10 +489,13 @@ class GetScoutingData(ActBase):
 
 
 class Dt_Harass(ActBase):
+    #TODO: Let only the frist DT walk to base and the rest attack the closest enemy, just as in the old MadBot
     def __init__(self):
         super().__init__()
         self.dts_detected = False
         self.already_merging_tags: List[int] = []
+        self.main_dt_tag: List[int] = []
+        self.first_dts = False
 
     async def execute(self) -> bool:
         if (self.cache.own(UnitTypeId.DARKTEMPLAR).ready and not self.dts_detected and self.cache.own(UnitTypeId.DARKTEMPLAR).ready.random.shield < 60) or \
@@ -333,40 +512,34 @@ class Dt_Harass(ActBase):
         # Start dark templar attack
         if not self.dts_detected:
             if self.cache.own(UnitTypeId.DARKTEMPLAR).exists:
-                dt1 = self.cache.own(UnitTypeId.DARKTEMPLAR)[0]
-                self.do(
-                    dt1(
-                        RALLY_UNITS,
-                        self.knowledge.expansion_zones[-1].mineral_line_center,
-                    )
-                )
-                self.knowledge.roles.set_task(UnitTask.Reserved, dt1)
-                if len(self.cache.own(UnitTypeId.DARKTEMPLAR)) > 1:
-                    dt2 = self.cache.own(UnitTypeId.DARKTEMPLAR)[1]
+                if not self.first_dts:
+                    dt1 = self.cache.own(UnitTypeId.DARKTEMPLAR)[0]
+                    self.main_dt_tag.append(dt1.tag)
                     self.do(
-                        dt2(
+                        dt1(
                             RALLY_UNITS,
-                            self.knowledge.expansion_zones[-2].mineral_line_center,
+                            self.knowledge.expansion_zones[-1].mineral_line_center,
                         )
                     )
-                    self.knowledge.roles.set_task(UnitTask.Reserved, dt2)
-                enemy_workers = self.knowledge.known_enemy_units.of_type(
-                    [UnitTypeId.SCV, UnitTypeId.PROBE, UnitTypeId.DRONE, UnitTypeId.MULE])
-                for dt in self.cache.own(UnitTypeId.DARKTEMPLAR).idle:
-                    if self.knowledge.known_enemy_structures.of_type(UnitTypeId.SPORECRAWLER).exists:
-                        self.do(
-                            dt.attack(
-                                self.knowledge.known_enemy_structures.of_type(UnitTypeId.SPORECRAWLER).closest_to(dt.position)
-                            )
-                        )
-                    elif enemy_workers.exists:
-                        self.do(
-                            dt.attack(
-                                enemy_workers.closest_to(dt.position)
-                            )
-                        )
-                    else:
-                        self.do(dt.attack(self.knowledge.known_enemy_units.closest_to(dt.position)))
+                    self.knowledge.roles.set_task(UnitTask.Reserved, dt1)
+                    self.first_dts = True
+                else:
+                    dts = self.cache.own(UnitTypeId.DARKTEMPLAR).ready.tags_not_in(self.main_dt_tag)
+                    if dts.amount == 1:
+                        exe_dt = dts[0]
+                        self.do(exe_dt.attack(self.knowledge.expansion_zones[-2].mineral_line_center))
+                        self.knowledge.roles.set_task(UnitTask.Reserved, exe_dt)
+                    elif dts.amount >= 2:
+                        dts = dts.random_group_of(2)
+                        exe_dt = dts[0]
+                        attack_dt = dts[1]
+                        self.do(exe_dt.attack(self.knowledge.expansion_zones[-2].mineral_line_center))
+                        self.do(attack_dt.attack(self.knowledge.enemy_main_zone.center_location))
+                        self.knowledge.roles.set_task(UnitTask.Reserved, exe_dt)
+                        self.knowledge.roles.set_task(UnitTask.Reserved, attack_dt)
+                        self.main_dt_tag.append(exe_dt.tag)
+                        self.main_dt_tag.append(attack_dt.tag)
+
         else:
             if len(self.ai.units(UnitTypeId.DARKTEMPLAR).ready.closer_than(10, self.knowledge.gather_point)) >= 2:
                 # Only morph Archons when its safe, i.e. at the current gather point
@@ -549,6 +722,8 @@ class MadAI(KnowledgeBot):
         #TODO: Use the Phoenix-Scout-Info to make the attack trigger more flexible, based on the power difference
         #TODO: Position Rallypoint behind natural wall on Discobloodbath
         #TODO: Move the builder probe towards the expansion already before minerals are at 400 just as it is done in BuildPosition
+        #TODO: Keep the units together better, i.e. not get lured out when defending or fight buildings while the other half of the army is fighting units somewhere close
+        #TODO: Defence against a single attacking worker is not functioning as intended
         return BuildOrder([
             Step(None, ChronoUnitProduction(UnitTypeId.PROBE, UnitTypeId.NEXUS),
                  skip=RequiredUnitExists(UnitTypeId.PROBE, 19, include_pending=True), skip_until=RequiredUnitReady(UnitTypeId.PYLON, 1)),
@@ -602,7 +777,7 @@ class MadAI(KnowledgeBot):
                         ProtossUnit(UnitTypeId.STALKER, 1, priority=True),
                         GridBuilding(UnitTypeId.GATEWAY, 3),
                         Step(RequiredTechReady(UpgradeId.WARPGATERESEARCH, 0.4), BuildPosition(UnitTypeId.PYLON, pylon_pos,
-                                                exact=False, only_once=True)),
+                                                exact=False, only_once=True), skip=RequiredTechReady(UpgradeId.WARPGATERESEARCH)),
                         GridBuilding(UnitTypeId.GATEWAY, 4),
                         [
                             Step(None, ProtossUnit(UnitTypeId.SENTRY, 1),
@@ -619,7 +794,7 @@ class MadAI(KnowledgeBot):
             ]),
             SequentialList([
                 # Stop Defending when attacking, i.e. Base-Trade
-                Step(None, PlanZoneDefense(), skip=RequiredUnitReady(UnitTypeId.STALKER, 4)),
+                Step(None, PlanZoneDefense(), skip=RequiredTechReady(UpgradeId.WARPGATERESEARCH)),
                 PlanZoneGather(),
                 # Step(RequiredUnitReady(UnitTypeId.GATEWAY, 4), PlanZoneGather()),
                 PlanZoneAttack(16),
@@ -642,14 +817,14 @@ class MadAI(KnowledgeBot):
                         Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 24)),
                     ]),
                 GridBuilding(UnitTypeId.ROBOTICSFACILITY, 1),
-                ProtossUnit(UnitTypeId.SENTRY, 1),
+                Step(None, ProtossUnit(UnitTypeId.SENTRY, 1), skip=RequiredTechReady(UpgradeId.CHARGE)),
                 Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 25)),
                 GridBuilding(UnitTypeId.PYLON, 3),
                 GridBuilding(UnitTypeId.GATEWAY, 2),
                 Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 26)),
                 BuildOrder(
                     [
-                        ProtossUnit(UnitTypeId.SENTRY, 2),
+                        Step(None, ProtossUnit(UnitTypeId.SENTRY, 2), skip=RequiredTechReady(UpgradeId.CHARGE)),
                         Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 30)),
                         GridBuilding(UnitTypeId.PYLON, 4),
                         SequentialList([
@@ -658,7 +833,7 @@ class MadAI(KnowledgeBot):
                         ])
                     ]),
                 Step(RequiredUnitReady(UnitTypeId.ROBOTICSFACILITY, 1), ProtossUnit(UnitTypeId.IMMORTAL, 1)),
-                ProtossUnit(UnitTypeId.ZEALOT, 3),
+                Step(None, ProtossUnit(UnitTypeId.ZEALOT, 3), skip=RequiredTechReady(UpgradeId.CHARGE)),
                 GridBuilding(UnitTypeId.GATEWAY, 3),
                 Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 32)),
                 Step(RequiredUnitReady(UnitTypeId.IMMORTAL, 1), ProtossUnit(UnitTypeId.OBSERVER, 1)),
@@ -666,7 +841,7 @@ class MadAI(KnowledgeBot):
                 Step(RequiredUnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.TWILIGHTCOUNCIL, 1)),
                 Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 34)),
                 Step(RequiredUnitReady(UnitTypeId.ROBOTICSFACILITY, 1), ProtossUnit(UnitTypeId.IMMORTAL, 2)),
-                ProtossUnit(UnitTypeId.SENTRY, 4),
+                Step(None, ProtossUnit(UnitTypeId.SENTRY, 4), skip=RequiredTechReady(UpgradeId.CHARGE)),
                 GridBuilding(UnitTypeId.GATEWAY, 4),
                 Step(RequiredUnitReady(UnitTypeId.IMMORTAL, 1), ActTech(UpgradeId.CHARGE, UnitTypeId.TWILIGHTCOUNCIL)),
                 StepBuildGas(4),
@@ -682,7 +857,7 @@ class MadAI(KnowledgeBot):
                          ProtossUnit(UnitTypeId.IMMORTAL, 20, priority=True)),
                     Step(RequiredUnitReady(UnitTypeId.ROBOTICSFACILITY, 1), ProtossUnit(UnitTypeId.ZEALOT, 7),
                          skip=RequiredUnitExists(UnitTypeId.TWILIGHTCOUNCIL, 1)),
-                    Step(RequiredUnitReady(UnitTypeId.SENTRY, 4), GateUnit()),
+                    Step(RequiredUnitReady(UnitTypeId.IMMORTAL, 1), GateUnit()),
 
                 ]),
             SequentialList([
@@ -730,14 +905,14 @@ class MadAI(KnowledgeBot):
                 Step(RequiredUnitReady(UnitTypeId.FORGE, 1),
                      BuildPosition(UnitTypeId.PHOTONCANNON, defensive_position2, exact=False, only_once=True)),
                 Step(RequiredUnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.TWILIGHTCOUNCIL, 1)),
-                ProtossUnit(UnitTypeId.SENTRY, 1),
+                Step(None, ProtossUnit(UnitTypeId.SENTRY, 1), skip=RequiredUnitReady(UnitTypeId.DARKSHRINE, 1)),
                 GridBuilding(UnitTypeId.PYLON, 3),
                 GridBuilding(UnitTypeId.GATEWAY, 2),
                 Step(RequiredUnitReady(UnitTypeId.TWILIGHTCOUNCIL, 1), GridBuilding(UnitTypeId.DARKSHRINE, 1)),
                 BuildOrder(
                     [
-                        ProtossUnit(UnitTypeId.SENTRY, 2),
-                        ProtossUnit(UnitTypeId.ZEALOT, 3),
+                        Step(None, ProtossUnit(UnitTypeId.SENTRY, 2), skip=RequiredUnitReady(UnitTypeId.DARKSHRINE, 1)),
+                        Step(None, ProtossUnit(UnitTypeId.ZEALOT, 3), skip=RequiredUnitReady(UnitTypeId.DARKSHRINE, 1)),
                         GridBuilding(UnitTypeId.GATEWAY, 3),
                         SequentialList([
                             Step(RequiredUnitReady(UnitTypeId.SENTRY, 1), HallucinatedPhoenixScout()),
@@ -753,8 +928,8 @@ class MadAI(KnowledgeBot):
                 Step(RequiredUnitReady(UnitTypeId.DARKSHRINE, 1), ProtossUnit(UnitTypeId.SENTRY, 5)),
             ],
             SequentialList([
-                Step(RequiredUnitReady(UnitTypeId.DARKTEMPLAR, 2), ActTech(UpgradeId.CHARGE, UnitTypeId.TWILIGHTCOUNCIL)),
-                Step(RequiredUnitReady(UnitTypeId.DARKTEMPLAR, 3), ActTech(UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1, UnitTypeId.FORGE)),
+                Step(RequiredUnitReady(UnitTypeId.DARKTEMPLAR, 1), ActTech(UpgradeId.CHARGE, UnitTypeId.TWILIGHTCOUNCIL)),
+                Step(RequiredUnitReady(UnitTypeId.DARKTEMPLAR, 1), ActTech(UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1, UnitTypeId.FORGE)),
                 Step(RequiredTechReady(UpgradeId.CHARGE, 0.1),
                      BuildPosition(UnitTypeId.PYLON, pylon_pos, exact=False, only_once=True))
             ]),
@@ -776,6 +951,8 @@ class MadAI(KnowledgeBot):
     def skytoss(self) -> ActBase:
         #TODO: Follow-up
         #TODO: Don't suicide the Oracle if there are units already waiting
+        #TODO: Strange freezing of Units and Groups after the first attack
+        #TODO: Switch to Tempests/Carrier and see how they perform
         natural_pylon_pos = self.knowledge.expansion_zones[1].mineral_line_center.towards(
                 self.knowledge.expansion_zones[1].behind_mineral_position_center, -12)
 
@@ -789,7 +966,7 @@ class MadAI(KnowledgeBot):
                 Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 24)),
                 GridBuilding(UnitTypeId.STARGATE, 1),
                 Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 25)),
-                ProtossUnit(UnitTypeId.SENTRY, 1),
+                Step(None, ProtossUnit(UnitTypeId.SENTRY, 1), skip=RequiredUnitReady(UnitTypeId.TEMPEST, 1)),
                 BuildPosition(UnitTypeId.SHIELDBATTERY, natural_pylon_pos, exact=False, only_once=True),
                 Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 26)),
                 ProtossUnit(UnitTypeId.ZEALOT, 2),
@@ -801,47 +978,49 @@ class MadAI(KnowledgeBot):
                             Step(RequiredUnitReady(UnitTypeId.SENTRY, 1), PlanHallucination()),
                         ])
                     ]),
-                Step(RequiredUnitReady(UnitTypeId.STARGATE, 1), ProtossUnit(UnitTypeId.ORACLE, 1, priority=True)),
+                Step(RequiredUnitReady(UnitTypeId.STARGATE, 1), GridBuilding(UnitTypeId.FLEETBEACON, 1)),
                 ActTech(UpgradeId.WARPGATERESEARCH, UnitTypeId.CYBERNETICSCORE),
                 Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 30)),
                 ProtossUnit(UnitTypeId.ZEALOT, 3),
-                Step(RequiredUnitReady(UnitTypeId.STARGATE, 1), ProtossUnit(UnitTypeId.VOIDRAY, 1)),
                 Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 32)),
+                Step(RequiredUnitReady(UnitTypeId.FLEETBEACON, 1), ProtossUnit(UnitTypeId.TEMPEST, 1)),
                 StepBuildGas(3),
                 ProtossUnit(UnitTypeId.ZEALOT, 4),
                 Step(RequiredUnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.TWILIGHTCOUNCIL, 1)),
                 Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 34)),
-                Step(RequiredUnitReady(UnitTypeId.STARGATE, 1), ProtossUnit(UnitTypeId.VOIDRAY, 2)),
+                Step(RequiredUnitReady(UnitTypeId.STARGATE, 1), ProtossUnit(UnitTypeId.TEMPEST, 2)),
+                StepBuildGas(4),
                 GridBuilding(UnitTypeId.STARGATE, 2),
                 Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 36)),
-                StepBuildGas(4),
-                Step(RequiredUnitReady(UnitTypeId.VOIDRAY, 1), ActTech(UpgradeId.PROTOSSAIRWEAPONSLEVEL1, UnitTypeId.CYBERNETICSCORE)),
+                Step(RequiredUnitReady(UnitTypeId.TEMPEST, 1), ActTech(UpgradeId.PROTOSSAIRWEAPONSLEVEL1, UnitTypeId.CYBERNETICSCORE)),
                 ProtossUnit(UnitTypeId.ZEALOT, 5),
                 Step(RequiredUnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 38)),
-                Step(RequiredUnitReady(UnitTypeId.STARGATE, 1), ProtossUnit(UnitTypeId.VOIDRAY, 3)),
+                Step(RequiredUnitReady(UnitTypeId.STARGATE, 1), ProtossUnit(UnitTypeId.TEMPEST, 3)),
                 Step(RequiredUnitReady(UnitTypeId.TWILIGHTCOUNCIL, 1), ActTech(UpgradeId.CHARGE, UnitTypeId.TWILIGHTCOUNCIL)),
                 GridBuilding(UnitTypeId.GATEWAY, 2),
-                Step(RequiredGas(300), GridBuilding(UnitTypeId.STARGATE, 3)),
+                Step(RequiredMinerals(500), GridBuilding(UnitTypeId.GATEWAY, 3)),
+
             ]),
             BuildOrder(
                 [
-                    AutoPylon(),
+                    Step(RequiredUnitReady(UnitTypeId.NEXUS, 2), AutoPylon()),
                     Step(RequiredUnitReady(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 44)),
-                    Step(RequiredUnitReady(UnitTypeId.VOIDRAY, 1), ProtossUnit(UnitTypeId.VOIDRAY, 20, priority=True)),
+                    Step(RequiredUnitReady(UnitTypeId.TEMPEST, 1), ProtossUnit(UnitTypeId.TEMPEST, 20, priority=True)),
                     Step(RequiredUnitReady(UnitTypeId.STARGATE, 2), ProtossUnit(UnitTypeId.ZEALOT, 50)),
                     Step(RequiredTechReady(UpgradeId.PROTOSSAIRWEAPONSLEVEL1),
-                         ActTech(UpgradeId.PROTOSSAIRARMORSLEVEL1, UnitTypeId.CYBERNETICSCORE)),
+                         ActTech(UpgradeId.PROTOSSAIRWEAPONSLEVEL2, UnitTypeId.CYBERNETICSCORE)),
+                    Step(RequiredTechReady(UpgradeId.PROTOSSAIRWEAPONSLEVEL2),
+                         ActTech(UpgradeId.PROTOSSAIRWEAPONSLEVEL3, UnitTypeId.CYBERNETICSCORE)),
                 ]),
             SequentialList([
                 ChronoUnitProduction(UnitTypeId.STALKER, UnitTypeId.GATEWAY),
-                ChronoUnitProduction(UnitTypeId.ORACLE, UnitTypeId.STARGATE),
+                ChronoUnitProduction(UnitTypeId.TEMPEST, UnitTypeId.STARGATE),
                 ChronoAnyTech(0)
             ]),
             SequentialList([
-                # Stop Defending when attacking, i.e. Base-Trade
-                Step(None, PlanZoneDefense(), skip=RequiredTechReady(UpgradeId.PROTOSSAIRWEAPONSLEVEL1, 0.9)),
+                PlanZoneDefense(),
                 PlanZoneGather(),
-                Step(RequiredUnitReady(UnitTypeId.ORACLE, 1), Oracle_Harass()),
+                # Step(RequiredUnitReady(UnitTypeId.ORACLE, 1), Oracle_Harass()),
                 Step(RequiredTechReady(UpgradeId.PROTOSSAIRWEAPONSLEVEL1, 0.9), attack),
                 PlanFinishEnemy(),
             ])
